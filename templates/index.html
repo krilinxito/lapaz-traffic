@@ -1,0 +1,828 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid px-4">
+
+  <!-- ══════════════════════════════════════════════════════════ TAB MAPA -->
+  <div id="tab-mapa" class="tab-pane active py-3">
+    <div class="row g-3 align-items-start">
+
+      <!-- ── Sidebar ── -->
+      <div class="col-lg-2 col-md-3 sidebar-col">
+        <div class="card mb-3 p-3">
+
+          <!-- Hora grande tipo marcador de minimetro -->
+          <div id="hora-section">
+            <div class="hora-big" id="hora-big">08<span>:00</span></div>
+            <div class="mb-3 mt-1">
+              <input type="range" id="hora-slider" min="0" max="23" value="8">
+              <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted);margin-top:3px">
+                <span>00:00</span><span>23:00</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label class="field-label">Zona</label>
+            <select class="form-select" id="zona-select">
+              <option value="lapaz">La Paz</option>
+              <option value="el_alto">El Alto</option>
+              <option value="ambas">Ambas</option>
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="field-label">Día</label>
+            <select class="form-select" id="dia-select">
+              {% for d in tipos_dia %}
+              <option value="{{ d }}">{{ dia_labels[d] }}</option>
+              {% endfor %}
+            </select>
+            <div id="dia-warning">⬤ Estimado con NMF — sin datos reales</div>
+          </div>
+
+          <div class="mb-3">
+            <label class="field-label">Calles</label>
+            <select class="form-select" id="cluster-select">
+              <option value="-1">Todas</option>
+              {% for c in clusters %}
+              <option value="{{ c }}">{{ cluster_info[c] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <button class="btn-metro" id="btn-aplicar">Actualizar mapa</button>
+
+          <div id="spinner">
+            <div class="spin-line">
+              <div class="spin-dot"></div>
+              <div class="spin-dot"></div>
+              <div class="spin-dot"></div>
+            </div>
+            <span>Cargando…</span>
+          </div>
+        </div>
+
+        <!-- Métricas -->
+        <div class="card">
+          <div class="metric-row">
+            <div class="metric-cell">
+              <div class="metric-value" id="met-jam">—</div>
+              <div class="metric-label" title="jam_factor promedio">Congestión</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-value" id="met-segs">—</div>
+              <div class="metric-label">Calles</div>
+            </div>
+            <div class="metric-cell">
+              <div class="metric-value" id="met-pico">—</div>
+              <div class="metric-label">Hora pico</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Centro: mapa + top5 ── -->
+      <div class="col-lg-6 col-md-5">
+        <div class="card mb-3">
+          <div class="section-title">
+            <span id="map-subtitle" style="font-weight:500;color:var(--text)">Mapa de congestión</span>
+            <div class="mode-toggle">
+              <button class="mode-btn active" id="modo-hora" onclick="setModoMapa('hora')">Por hora</button>
+              <button class="mode-btn" id="modo-prom" onclick="setModoMapa('promedio')">Promedio</button>
+            </div>
+          </div>
+          <iframe id="map-frame"
+            srcdoc="<p style='color:#8a8078;text-align:center;padding:3rem;font-family:Space Grotesk,sans-serif;font-size:13px'>Cargando mapa…</p>">
+          </iframe>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            Top 5 — mayor congestión
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">clic para ver detalle</span>
+          </div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr>
+                  <th>#</th><th>Calle</th><th>Tipo</th><th>Congestión</th><th>Grupo</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-top5"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Derecha: detalle ── -->
+      <div class="col-lg-4 col-md-4">
+        <div class="card" style="min-height:520px">
+          <div class="section-title">Estado actual</div>
+          <div id="panel-detalle" class="p-3">
+            <div id="panel-interpretacion"></div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div><!-- /tab-mapa -->
+
+
+  <!-- ══════════════════════════════════════════════════════ TAB CLUSTERS -->
+  <div id="tab-clusters" class="tab-pane py-3">
+    <div class="row g-3">
+
+      <div class="col-md-7">
+        <div class="card">
+          <div class="section-title">
+            Proyección UMAP — espacio de comportamiento
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">tamaño ∝ jam_mean · clic para detalle</span>
+          </div>
+          <div class="p-2"><div id="chart-umap" style="height:380px"></div></div>
+        </div>
+      </div>
+
+      <div class="col-md-5">
+        <div class="card mb-3">
+          <div class="section-title">Resumen por cluster</div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead>
+                <tr><th>Cluster</th><th>Segs.</th><th>Jam medio</th><th>Hora pico</th><th>Vía</th></tr>
+              </thead>
+              <tbody id="tabla-clusters"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="section-title">
+            Perfil temporal
+            <select class="form-select d-inline-block w-auto" id="cluster-dia-select"
+              style="font-size:11px;padding:3px 24px 3px 8px;border-radius:var(--radius)">
+              {% for d in tipos_dia %}
+              <option value="{{ d }}">{{ dia_labels[d] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="p-2"><div id="chart-cluster-perfil" style="height:220px"></div></div>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="row g-3 mt-1">
+      <div class="col-md-4">
+        <div class="card">
+          <div class="section-title">
+            Varianza explicada — PCA
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">168 → 13 componentes</span>
+          </div>
+          <div class="p-2"><div id="chart-pca" style="height:240px"></div></div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card">
+          <div class="section-title">
+            Patrón horario por cluster
+            <select class="form-select d-inline-block w-auto" id="heatmap-dia-select"
+              style="font-size:11px;padding:3px 24px 3px 8px;border-radius:var(--radius)">
+              {% for d in tipos_dia %}
+              <option value="{{ d }}">{{ dia_labels[d] }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="p-2"><div id="chart-heatmap" style="height:240px"></div></div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <div class="card">
+          <div class="section-title">Distribución jam_mean</div>
+          <div class="p-2"><div id="chart-violin" style="height:240px"></div></div>
+        </div>
+      </div>
+    </div>
+  </div><!-- /tab-clusters -->
+
+
+  <!-- ══════════════════════════════════════════════════════ TAB MÉTODOS -->
+  <div id="tab-metodos" class="tab-pane py-3">
+    <div class="row justify-content-center">
+      <div class="col-lg-7">
+
+        <p style="font-size:12px;color:var(--muted);margin-bottom:28px">
+          Pipeline de análisis — 6 pasos desde los datos crudos hasta el mapa interactivo.
+        </p>
+
+        <!-- Los colores de línea rotan: azul, verde, rojo, naranja, verde, azul -->
+        {% set step_colors = ['#1565c0','#1a9e5c','#e02020','#e87722','#1a9e5c','#1565c0'] %}
+
+        <div class="method-step">
+          <div class="method-line-col">
+            <div class="method-station" style="border-color:#1565c0;background:#fff"></div>
+            <div class="method-connector" style="background:#1565c0;opacity:.2"></div>
+          </div>
+          <div class="method-body-col">
+            <div class="method-num">01</div>
+            <div class="method-title">Recolección de datos</div>
+            <div class="method-desc">
+              <strong>Google Maps Distance Matrix API</strong> con tráfico histórico
+              sobre 250 segmentos viales estratificados por tipo de vía.
+              4 días × 24 horas = <strong>24 000 registros</strong> por zona.
+            </div>
+            <div class="mt-2">
+              <span class="method-tag">250 segmentos</span>
+              <span class="method-tag">lun · mié · vie · sáb</span>
+              <span class="method-tag">0–23 h</span>
+              <span class="method-tag">jam = t_tráfico / t_libre</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-step">
+          <div class="method-line-col">
+            <div class="method-station" style="border-color:#1a9e5c;background:#fff"></div>
+            <div class="method-connector" style="background:#1a9e5c;opacity:.2"></div>
+          </div>
+          <div class="method-body-col">
+            <div class="method-num">02</div>
+            <div class="method-title">Red vial — OSMnx</div>
+            <div class="method-desc">
+              Red descargada desde OpenStreetMap con <strong>osmnx</strong>.
+              Muestreo estratificado por tipo de vía para representar
+              arterias primarias, secundarias y residenciales.
+            </div>
+            <div class="mt-2">
+              <span class="method-tag">37 100 aristas</span>
+              <span class="method-tag">2 167 km red total</span>
+              <span class="method-tag">haversine GPS</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-step">
+          <div class="method-line-col">
+            <div class="method-station" style="border-color:#e02020;background:#fff"></div>
+            <div class="method-connector" style="background:#e02020;opacity:.2"></div>
+          </div>
+          <div class="method-body-col">
+            <div class="method-num">03</div>
+            <div class="method-title">Síntesis de días — NMF + PCHIP</div>
+            <div class="method-desc">
+              <strong>NMF</strong> (k = 6 arquetipos) descompone los 4 días reales;
+              <strong>PCHIP</strong> interpola martes y jueves, extrapola domingo.
+              La matriz crece de 96 → <strong>168 columnas</strong>.
+            </div>
+            <div class="mt-2">
+              <span class="method-tag">k = 6 arquetipos</span>
+              <span class="method-tag">RMSE-CV ≈ 0.46</span>
+              <span class="method-tag">domingo = baja confianza</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-step">
+          <div class="method-line-col">
+            <div class="method-station" style="border-color:#e87722;background:#fff"></div>
+            <div class="method-connector" style="background:#e87722;opacity:.2"></div>
+          </div>
+          <div class="method-body-col">
+            <div class="method-num">04</div>
+            <div class="method-title">Reducción — PCA + UMAP</div>
+            <div class="method-desc">
+              <strong>PCA</strong> comprime 168 dimensiones a 13 componentes
+              capturando el 86–96 % de la varianza.
+              <strong>UMAP</strong> proyecta a 2D preservando estructura local y global.
+            </div>
+            <div class="mt-2">
+              <span class="method-tag">168 → 13 → 2D</span>
+              <span class="method-tag">86–96 % varianza</span>
+              <span class="method-tag">n_neighbors = 15</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-step">
+          <div class="method-line-col">
+            <div class="method-station" style="border-color:#1a9e5c;background:#fff"></div>
+            <div class="method-connector" style="background:#1a9e5c;opacity:.2"></div>
+          </div>
+          <div class="method-body-col">
+            <div class="method-num">05</div>
+            <div class="method-title">Clustering espacial — DBSCAN</div>
+            <div class="method-desc">
+              Agrupa segmentos por proximidad geográfica con métrica
+              <strong>haversine</strong>. No requiere k; detecta outliers automáticamente.
+            </div>
+            <div class="mt-2">
+              <span class="method-tag">ε = 500 m</span>
+              <span class="method-tag">min_samples = 5</span>
+              <span class="method-tag">~ 2 % outliers</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="method-step" style="margin-bottom:0">
+          <div class="method-line-col">
+            <div class="method-station" style="border-color:#1565c0;background:#1565c0"></div>
+          </div>
+          <div class="method-body-col">
+            <div class="method-num">06</div>
+            <div class="method-title">Clustering temporal — K-Means</div>
+            <div class="method-desc">
+              K-Means sobre la feature matrix identifica patrones temporales.
+              k = 2 elegido por método del codo + silhouette score:
+              <strong>alta congestión</strong> (arterias principales)
+              vs <strong>baja congestión</strong> (residencial).
+            </div>
+            <div class="mt-2">
+              <span class="method-tag">k = 2</span>
+              <span class="method-tag">n_init = 20</span>
+              <span class="method-tag">27 / 223 segs (La Paz)</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div><!-- /tab-metodos -->
+
+</div>
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script>
+/* ── Constantes ─────────────────────────────────────────────────────── */
+const CLUSTER_ALTO    = {{ cluster_alto }};
+const TIPOS_DIA       = {{ tipos_dia | tojson }};
+const CLUSTERS        = {{ clusters | tojson }};
+const DIAS_SINTETICOS = {{ dias_sinteticos | tojson }};
+const CLUSTER_INFO    = {{ cluster_info | tojson }};
+let _modoMapa = 'hora';
+
+/* Paleta Mini Metro para Plotly */
+const MM = { red:'#e02020', green:'#1a9e5c', blue:'#1565c0', yellow:'#f4b942', orange:'#e87722', muted:'#8a8078' };
+
+const layout0 = {
+  paper_bgcolor: 'transparent', plot_bgcolor: 'transparent',
+  font: { color: '#1a1a1a', size: 11, family: 'Space Grotesk, sans-serif' },
+  margin: { t: 10, b: 40, l: 48, r: 12 },
+  legend: { bgcolor: 'transparent', font: { size: 11 } },
+  xaxis: { gridcolor: '#e3ddd4', zerolinecolor: '#e3ddd4' },
+  yaxis: { gridcolor: '#e3ddd4', zerolinecolor: '#e3ddd4' },
+};
+
+const hwLabels = {
+  primary: 'Principal', secondary: 'Secundaria', tertiary: 'Terciaria',
+  residential: 'Residencial', trunk: 'Autopista', unclassified: 'Sin clasificar',
+  primary_link: 'Ramal principal', secondary_link: 'Ramal sec.', tertiary_link: 'Ramal terc.',
+  living_street: 'Peatonal', motorway: 'Autopista', motorway_link: 'Ramal autopista',
+  service: 'Acceso', footway: 'Sendero', cycleway: 'Ciclovía',
+};
+
+/* ── Badge dot helper ───────────────────────────────────────────────── */
+function dotBadge(esAlto) {
+  const cls = esAlto ? 'dot-alto' : 'dot-bajo';
+  const lbl = esAlto ? 'Alta congestión' : 'Baja congestión';
+  return `<span class="dot-badge ${cls}"><span class="station"></span>${lbl}</span>`;
+}
+
+/* ── Panel de interpretación ────────────────────────────────────────── */
+let _lastInterpretacion = '';
+
+function renderInterpretacion(f, metr, perfilSeries) {
+  const jam    = metr.jam_promedio;
+  const nivel  = jam < 0.10 ? 'BAJA' : jam < 0.35 ? 'MEDIA' : 'ALTA';
+  const clr    = jam < 0.10 ? MM.green : jam < 0.35 ? MM.yellow : MM.red;
+
+  const vals      = perfilSeries || Array(24).fill(0);
+  const mejorHora = vals.indexOf(Math.min(...vals));
+  const horaPico  = metr.hora_pico;
+  const nCalles   = metr.n_segmentos;
+  const pct       = Math.min(100, jam * 280).toFixed(0);
+
+  const zonaLabel = { lapaz: 'La Paz', el_alto: 'El Alto', ambas: 'Ambas' }[f.zona] || f.zona;
+  const diaLabel  = f.dia.charAt(0).toUpperCase() + f.dia.slice(1);
+
+  const html = `
+    <div style="padding:2px 0">
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px">
+        ${diaLabel} — ${String(f.hora).padStart(2,'0')}:00 · ${zonaLabel}
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px">
+          <span style="font-size:22px;font-weight:700;color:${clr};letter-spacing:-.5px">${nivel}</span>
+          <span style="font-size:12px;color:var(--muted)">${jam.toFixed(3)}</span>
+        </div>
+        <div style="height:3px;border-radius:2px;background:var(--border)">
+          <div style="height:3px;border-radius:2px;background:${clr};width:${pct}%;transition:width .3s"></div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+        <div style="border:1px solid var(--border);border-radius:2px;padding:10px 12px">
+          <div style="font-size:20px;font-weight:700;color:${MM.red};letter-spacing:-.5px">${String(horaPico).padStart(2,'0')}:00</div>
+          <div style="font-size:10px;color:var(--muted);font-weight:500;margin-top:1px">hora pico</div>
+        </div>
+        <div style="border:1px solid var(--border);border-radius:2px;padding:10px 12px">
+          <div style="font-size:20px;font-weight:700;color:${MM.green};letter-spacing:-.5px">${String(mejorHora).padStart(2,'0')}:00</div>
+          <div style="font-size:10px;color:var(--muted);font-weight:500;margin-top:1px">mejor hora</div>
+        </div>
+      </div>
+
+      <div style="font-size:12px;color:var(--muted);margin-bottom:12px">
+        <strong style="color:var(--text)">${nCalles}</strong> calles monitoreadas
+      </div>
+
+      <div style="border-left:3px solid ${clr};padding:8px 12px;
+                  background:${clr}0f;border-radius:0 2px 2px 0;
+                  font-size:12px;color:var(--text);line-height:1.55">
+        ${nivel === 'BAJA'
+          ? 'Buen momento para circular. Tráfico fluido en la zona.'
+          : nivel === 'MEDIA'
+          ? `Tráfico moderado. Preferí circular antes de las ${String(Math.max(0,horaPico-1)).padStart(2,'0')}:00 o después de las ${String(Math.min(23,horaPico+1)).padStart(2,'0')}:00.`
+          : `Tráfico intenso. El mejor momento para salir es alrededor de las ${String(mejorHora).padStart(2,'0')}:00.`}
+      </div>
+
+      <div style="margin-top:14px;font-size:11px;color:var(--muted);line-height:1.5">
+        Hacé clic en una calle del mapa o en la tabla para ver su perfil completo.
+      </div>
+    </div>`;
+
+  _lastInterpretacion = html;
+  document.getElementById('panel-detalle').innerHTML =
+    '<div id="panel-interpretacion">' + html + '</div>';
+}
+
+function showInterpretacion() {
+  document.getElementById('panel-detalle').innerHTML =
+    '<div id="panel-interpretacion">' + _lastInterpretacion + '</div>';
+}
+
+/* ── Helpers ────────────────────────────────────────────────────────── */
+function getFilters() {
+  return {
+    hora:    parseInt(document.getElementById('hora-slider').value),
+    dia:     document.getElementById('dia-select').value,
+    cluster: parseInt(document.getElementById('cluster-select').value),
+    zona:    document.getElementById('zona-select').value,
+  };
+}
+function setLoading(on) {
+  document.getElementById('spinner').style.display = on ? 'flex' : 'none';
+}
+function updateDiaWarning(dia) {
+  document.getElementById('dia-warning').style.display =
+    DIAS_SINTETICOS.includes(dia) ? 'block' : 'none';
+}
+function setModoMapa(modo) {
+  _modoMapa = modo;
+  document.getElementById('modo-hora').classList.toggle('active', modo === 'hora');
+  document.getElementById('modo-prom').classList.toggle('active', modo === 'promedio');
+  document.getElementById('hora-section').style.display = modo === 'promedio' ? 'none' : '';
+  refresh();
+}
+
+/* ── Mapa ───────────────────────────────────────────────────────────── */
+async function loadMap(f) {
+  const zonaL = { lapaz: 'La Paz', el_alto: 'El Alto', ambas: 'Ambas' }[f.zona] || f.zona;
+  let url, subtitleText;
+  if (_modoMapa === 'promedio') {
+    url = `/map-promedio?zona=${f.zona}`;
+    subtitleText = `${zonaL} · promedio histórico`;
+  } else {
+    url = `/map?hora=${f.hora}&dia=${f.dia}&cluster=${f.cluster}&zona=${f.zona}`;
+    const cl = f.cluster === -1 ? 'todas las calles'
+      : (CLUSTER_INFO[String(f.cluster)] || `Cluster ${f.cluster}`);
+    const esSint = DIAS_SINTETICOS.includes(f.dia);
+    subtitleText = `${zonaL} · ${f.dia.charAt(0).toUpperCase()+f.dia.slice(1)} `
+      + `${String(f.hora).padStart(2,'0')}:00`
+      + (esSint ? ' · estimado' : '');
+  }
+  const res  = await fetch(url);
+  const html = await res.text();
+  document.getElementById('map-frame').srcdoc = html;
+  document.getElementById('map-subtitle').textContent = subtitleText;
+}
+
+/* ── Métricas ───────────────────────────────────────────────────────── */
+async function loadMetricas(f) {
+  const res = await fetch(`/metricas?hora=${f.hora}&dia=${f.dia}&cluster=${f.cluster}&zona=${f.zona}`);
+  const d = await res.json();
+  document.getElementById('met-jam').textContent  = d.jam_promedio.toFixed(3);
+  document.getElementById('met-segs').textContent = d.n_segmentos;
+  document.getElementById('met-pico').textContent = String(d.hora_pico).padStart(2,'0') + ':00';
+}
+
+/* ── Top 5 ──────────────────────────────────────────────────────────── */
+async function loadTop5(f) {
+  const res  = await fetch(`/top10?hora=${f.hora}&dia=${f.dia}&cluster=${f.cluster}&zona=${f.zona}`);
+  const rows = await res.json();
+  document.getElementById('tabla-top5').innerHTML = rows.slice(0,5).map((r, i) => {
+    const esAlto  = r.cluster_temporal === CLUSTER_ALTO;
+    const hwLabel = hwLabels[r.highway] || r.highway;
+    const jam     = parseFloat(r.jam_factor);
+    const clr     = jam > 0.3 ? MM.red : MM.green;
+    const pct     = Math.min(100, jam * 220).toFixed(0);
+    return `<tr style="cursor:pointer" id="row-${r.segment_id}" onclick="selectSegmento(${r.segment_id})">
+      <td style="color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500">${i+1}</td>
+      <td style="font-weight:500">${r.nombre}</td>
+      <td style="font-size:11px;color:var(--muted)">${hwLabel}</td>
+      <td style="min-width:80px">
+        <div style="position:relative">
+          <div style="position:absolute;inset:0;background:${clr};opacity:.08;border-radius:1px"></div>
+          <span style="position:relative;color:${clr};font-weight:700;font-size:13px;
+                       font-variant-numeric:tabular-nums">${jam.toFixed(3)}</span>
+        </div>
+      </td>
+      <td>${dotBadge(esAlto)}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ── Selección desde tabla ──────────────────────────────────────────── */
+async function selectSegmento(sid) {
+  document.querySelectorAll('#tabla-top5 tr').forEach(r => r.style.background = '');
+  const rowEl = document.getElementById('row-' + sid);
+  if (rowEl) rowEl.style.background = '#1565c009';
+  const d = await loadSegmento(sid);
+  if (d && d.lat !== undefined) {
+    const iframe = document.getElementById('map-frame');
+    const msg = { type: 'fly_to', lat: d.lat, lon: d.lon };
+    const send = () => iframe.contentWindow?.postMessage(msg, '*');
+    if (iframe.contentDocument?.readyState === 'complete') {
+      send();
+    } else {
+      iframe.addEventListener('load', send, { once: true });
+    }
+  }
+}
+
+/* ── Detalle de segmento ────────────────────────────────────────────── */
+async function loadSegmento(sid) {
+  const res = await fetch(`/segmento/${sid}`);
+  const d   = await res.json();
+  const hwLabel = hwLabels[d.highway] || d.highway;
+
+  const lineColors = [MM.blue, MM.red, MM.green, MM.orange, MM.yellow, MM.muted, '#9b59b6'];
+  document.getElementById('panel-detalle').innerHTML = `
+    <div style="width:100%">
+      <button onclick="showInterpretacion()"
+        style="background:none;border:none;color:var(--blue);font-size:12px;font-weight:600;
+               cursor:pointer;padding:0;margin-bottom:12px;font-family:inherit">
+        ← Volver
+      </button>
+      <div style="font-weight:700;font-size:15px;margin-bottom:12px;line-height:1.3">${d.nombre}</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div style="flex:1;border:1px solid var(--border);border-radius:2px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:var(--blue);letter-spacing:-.5px">${d.jam_mean.toFixed(3)}</div>
+          <div style="font-size:10px;color:var(--muted);font-weight:500;margin-top:1px">congestión media</div>
+        </div>
+        <div style="flex:1;border:1px solid var(--border);border-radius:2px;padding:10px;text-align:center">
+          <div style="font-size:20px;font-weight:700;color:var(--blue);letter-spacing:-.5px">${d.length_m} m</div>
+          <div style="font-size:10px;color:var(--muted);font-weight:500;margin-top:1px">longitud</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:12px">
+        <span style="background:var(--bg);border:1px solid var(--border);border-radius:20px;
+                     padding:2px 9px;font-size:11px;color:var(--muted)">${hwLabel}</span>
+        ${dotBadge(d.cluster_temporal === CLUSTER_ALTO)}
+      </div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.4">
+        Clasificación por perfil histórico — no refleja un momento concreto
+      </div>
+      <div id="chart-segmento" style="height:210px"></div>
+    </div>`;
+
+  const traces = TIPOS_DIA.map((dia, i) => ({
+    x: Array.from({length:24}, (_,h)=>h),
+    y: d.perfil[dia],
+    name: dia.charAt(0).toUpperCase()+dia.slice(1),
+    mode: 'lines', line: { color: lineColors[i % lineColors.length], width: 2 },
+    hovertemplate: '%{y:.3f}<extra>'+dia+'</extra>'
+  }));
+  Plotly.newPlot('chart-segmento', traces, {
+    ...layout0,
+    xaxis: { ...layout0.xaxis, title: 'Hora', dtick: 4 },
+    yaxis: { ...layout0.yaxis, title: 'jam', range: [0, null] },
+  }, { responsive: true, displayModeBar: false });
+  return d;
+}
+
+window.addEventListener('message', e => {
+  if (e.data && e.data.type === 'segment_click') loadSegmento(e.data.segment_id);
+});
+
+/* ── Refresh principal ──────────────────────────────────────────────── */
+async function refresh() {
+  const f = getFilters();
+  setLoading(true);
+  await Promise.all([loadMap(f), loadMetricas(f), loadTop5(f)]);
+  const [perfilRes, metrRes] = await Promise.all([
+    fetch(`/perfil?cluster=-1&dia=${f.dia}&zona=${f.zona}`),
+    fetch(`/metricas?hora=${f.hora}&dia=${f.dia}&cluster=-1&zona=${f.zona}`)
+  ]);
+  const perfilD = await perfilRes.json();
+  const metrD   = await metrRes.json();
+  renderInterpretacion(f, metrD, perfilD.series[f.dia]);
+  setLoading(false);
+}
+
+/* ── Slider: hora grande + debounce ─────────────────────────────────── */
+let _horaTimer = null;
+document.getElementById('hora-slider').addEventListener('input', e => {
+  const h = String(e.target.value).padStart(2,'0');
+  document.getElementById('hora-big').innerHTML = `${h}<span>:00</span>`;
+  clearTimeout(_horaTimer);
+  _horaTimer = setTimeout(refresh, 550);
+});
+document.getElementById('btn-aplicar').addEventListener('click', () => {
+  clearTimeout(_horaTimer); refresh();
+});
+document.getElementById('dia-select').addEventListener('change', e => {
+  updateDiaWarning(e.target.value);
+});
+updateDiaWarning(document.getElementById('dia-select').value);
+
+/* ══════════════════════════════════════════ Tab Clusters ════════════ */
+window._clustersLoaded = false;
+
+async function loadClusters() {
+  const zona = document.getElementById('zona-select').value;
+  const res  = await fetch(`/clusters-data?zona=${zona}`);
+  const d = await res.json();
+
+  /* UMAP scatter — colores Mini Metro */
+  const clMap = {};
+  d.points.forEach(p => {
+    if (!clMap[p.cluster_temporal]) clMap[p.cluster_temporal] = [];
+    clMap[p.cluster_temporal].push(p);
+  });
+  const umapTraces = Object.entries(clMap).map(([cl, pts]) => {
+    const esAlto = parseInt(cl) === CLUSTER_ALTO;
+    return {
+      x: pts.map(p => p.umap_x), y: pts.map(p => p.umap_y),
+      mode: 'markers',
+      name: esAlto ? 'Alta congestión' : 'Baja congestión',
+      marker: {
+        size: pts.map(p => 5 + p.jam_mean * 5),
+        opacity: 0.80,
+        color: esAlto ? MM.red : MM.green,
+      },
+      text: pts.map(p => `Seg ${p.segment_id}<br>${p.highway}<br>jam: ${p.jam_mean.toFixed(3)}`),
+      hovertemplate: '%{text}<extra></extra>',
+      customdata: pts.map(p => p.segment_id),
+    };
+  });
+  Plotly.newPlot('chart-umap', umapTraces, {
+    ...layout0,
+    showlegend: true,
+    xaxis: { ...layout0.xaxis, title: 'UMAP 1' },
+    yaxis: { ...layout0.yaxis, title: 'UMAP 2' },
+  }, { responsive: true, displayModeBar: false });
+
+  document.getElementById('chart-umap').on('plotly_click', ev => {
+    const sid = ev.points[0].customdata;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    document.querySelector('[data-tab="mapa"]').classList.add('active');
+    document.getElementById('tab-mapa').classList.add('active');
+    loadSegmento(sid);
+  });
+
+  /* Tabla resumen */
+  document.getElementById('tabla-clusters').innerHTML = d.resumen.map(r => {
+    const esAlto = r.cluster_temporal === CLUSTER_ALTO;
+    return `<tr>
+      <td>${dotBadge(esAlto)}</td>
+      <td style="font-weight:600">${r.n_segmentos}</td>
+      <td style="font-weight:700;color:${esAlto ? MM.red : MM.green}">${r.jam_promedio.toFixed(3)}</td>
+      <td>${String(r.hora_pico).padStart(2,'0')}:00</td>
+      <td style="font-size:11px;color:var(--muted)">${r.highway_dominante}</td>
+    </tr>`;
+  }).join('');
+
+  await Promise.all([loadClusterPerfil(), loadPCA(), loadHeatmap(TIPOS_DIA[0]), loadViolin(d.points)]);
+  window._clustersLoaded = true;
+}
+
+/* Perfil temporal */
+async function loadClusterPerfil() {
+  const dia  = document.getElementById('cluster-dia-select').value;
+  const zona = document.getElementById('zona-select').value;
+  const horas = Array.from({length:24}, (_,i)=>i);
+  const traces = await Promise.all(CLUSTERS.map(async cl => {
+    const res = await fetch(`/perfil?cluster=${cl}&dia=${dia}&zona=${zona}`);
+    const d = await res.json();
+    const esAlto = cl === CLUSTER_ALTO;
+    return {
+      x: horas, y: d.series[dia],
+      name: esAlto ? 'Alta congestión' : 'Baja congestión',
+      mode: 'lines', fill: 'tozeroy',
+      fillcolor: (esAlto ? MM.red : MM.green) + '18',
+      line: { color: esAlto ? MM.red : MM.green, width: 2.5 },
+      hovertemplate: '%{y:.3f}<extra>' + (esAlto ? 'Alta' : 'Baja') + '</extra>'
+    };
+  }));
+  Plotly.react('chart-cluster-perfil', traces, {
+    ...layout0,
+    xaxis: { ...layout0.xaxis, title: 'Hora', dtick: 4 },
+    yaxis: { ...layout0.yaxis, title: 'jam' },
+  }, { responsive: true, displayModeBar: false });
+}
+
+/* PCA scree */
+async function loadPCA() {
+  const zona = document.getElementById('zona-select').value;
+  const res  = await fetch(`/pca-data?zona=${zona}`);
+  const d = await res.json();
+  const pcs = d.variance_ratio.map((_, i) => `PC${i+1}`);
+  Plotly.newPlot('chart-pca', [
+    { x: pcs, y: d.variance_ratio.map(v => +(v*100).toFixed(2)), type: 'bar',
+      name: '% varianza', marker: { color: MM.blue + 'cc' },
+      hovertemplate: '%{x}: %{y:.1f}%<extra></extra>' },
+    { x: pcs, y: d.cumulative.map(v => +(v*100).toFixed(2)),
+      type: 'scatter', name: 'Acumulada', mode: 'lines+markers',
+      line: { color: MM.orange, width: 2 }, marker: { size: 5 }, yaxis: 'y2',
+      hovertemplate: '%{x}: %{y:.1f}%<extra>acumulada</extra>' },
+  ], {
+    ...layout0,
+    margin: { t: 10, b: 40, l: 44, r: 48 },
+    xaxis: { ...layout0.xaxis, title: 'Componente' },
+    yaxis: { ...layout0.yaxis, title: '% varianza' },
+    yaxis2: { title: '% acumulado', overlaying: 'y', side: 'right',
+      range: [0, 105], showgrid: false, color: MM.orange,
+      tickfont: { color: MM.orange, size: 10 } },
+    shapes: [{ type:'line', xref:'paper', yref:'y2', x0:0, x1:1, y0:80, y1:80,
+      line: { color: MM.orange, width: 1, dash:'dot' } }],
+  }, { responsive: true, displayModeBar: false });
+}
+
+/* Heatmap */
+async function loadHeatmap(dia) {
+  const zona = document.getElementById('zona-select').value;
+  const rows = await Promise.all(CLUSTERS.map(async cl => {
+    const res = await fetch(`/perfil?cluster=${cl}&dia=${dia}&zona=${zona}`);
+    const d = await res.json();
+    return d.series[dia];
+  }));
+  const yLabels = CLUSTERS.map(cl => cl === CLUSTER_ALTO ? 'Alta congestión' : 'Baja congestión');
+  Plotly.react('chart-heatmap', [{
+    z: rows,
+    x: Array.from({length:24}, (_,i) => `${String(i).padStart(2,'0')}h`),
+    y: yLabels,
+    type: 'heatmap',
+    colorscale: [[0, MM.green+'40'], [0.5, MM.yellow+'80'], [1, MM.red]],
+    colorbar: { thickness: 10, len: 0.8, tickfont: { size: 10 } },
+    hovertemplate: '%{x} — %{y}<br>jam: %{z:.3f}<extra></extra>',
+  }], {
+    ...layout0,
+    margin: { t:10, b:40, l:110, r:60 },
+    xaxis: { ...layout0.xaxis, title: 'Hora' },
+    yaxis: { automargin: true },
+  }, { responsive: true, displayModeBar: false });
+}
+
+/* Violin */
+function loadViolin(points) {
+  const byCluster = {};
+  points.forEach(p => {
+    if (!byCluster[p.cluster_temporal]) byCluster[p.cluster_temporal] = [];
+    byCluster[p.cluster_temporal].push(p.jam_mean);
+  });
+  const traces = Object.entries(byCluster).map(([cl, vals]) => {
+    const esAlto = parseInt(cl) === CLUSTER_ALTO;
+    const clr = esAlto ? MM.red : MM.green;
+    return {
+      y: vals, type: 'violin',
+      name: esAlto ? 'Alta congestión' : 'Baja congestión',
+      box: { visible: true }, meanline: { visible: true },
+      marker: { color: clr, size: 3 },
+      fillcolor: clr + '22', line: { color: clr },
+      hovertemplate: 'jam: %{y:.3f}<extra>' + (esAlto ? 'Alta' : 'Baja') + '</extra>',
+    };
+  });
+  Plotly.newPlot('chart-violin', traces, {
+    ...layout0,
+    yaxis: { ...layout0.yaxis, title: 'jam_mean', range: [0, null] },
+    violinmode: 'group',
+  }, { responsive: true, displayModeBar: false });
+}
+
+/* Listeners */
+document.getElementById('cluster-dia-select').addEventListener('change', () => {
+  if (window._clustersLoaded) loadClusterPerfil();
+});
+document.getElementById('heatmap-dia-select').addEventListener('change', e => {
+  if (window._clustersLoaded) loadHeatmap(e.target.value);
+});
+
+/* Carga inicial */
+refresh();
+</script>
+{% endblock %}

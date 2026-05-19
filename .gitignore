@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Entorno virtual
+.env
+.venv/
+venv/
+env/
+
+# API keys
+.env.local
+secrets.py
+
+# Jupyter
+notebooks/cache/
+notebooks/.ipynb_checkpoints/
+.ipynb_checkpoints/
+
+# LaTeX build artifacts
+informe/*.aux
+informe/*.log
+informe/*.out
+informe/*.toc
+informe/*.synctex.gz
+
+# Archivos grandes / binarios
+data/raw/lapaz_network.gpkg
+data/raw/el_alto/
+
+# Mapas HTML generados (pesados, se regeneran con el pipeline)
+data/processed/map_*.html
+
+# Capturas de sesión de recolección (timestamped, no son del dataset principal)
+data/raw/traffic_2026-*.csv
+
+# Sistema
+.DS_Store
+Thumbs.db

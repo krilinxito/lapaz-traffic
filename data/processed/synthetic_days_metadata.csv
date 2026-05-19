@@ -1,0 +1,15 @@
+dia,zona,tipo,rmse_cv,confianza
+lunes,lapaz,real,0.0,alta
+martes,lapaz,interpolado,0.46184,media
+miercoles,lapaz,real,0.0,alta
+jueves,lapaz,interpolado,0.46184,media
+viernes,lapaz,real,0.0,alta
+sabado,lapaz,real,0.0,alta
+domingo,lapaz,extrapolado,0.46184,baja
+lunes,el_alto,real,0.0,alta
+martes,el_alto,interpolado,0.43468,media
+miercoles,el_alto,real,0.0,alta
+jueves,el_alto,interpolado,0.43468,media
+viernes,el_alto,real,0.0,alta
+sabado,el_alto,real,0.0,alta
+domingo,el_alto,extrapolado,0.43468,baja
