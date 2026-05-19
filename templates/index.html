@@ -90,11 +90,21 @@
             <div class="mode-toggle">
               <button class="mode-btn active" id="modo-hora" onclick="setModoMapa('hora')">Por hora</button>
               <button class="mode-btn" id="modo-prom" onclick="setModoMapa('promedio')">Promedio</button>
+              <button class="mode-btn" id="modo-dbscan" onclick="setModoMapa('dbscan')">DBSCAN</button>
+              <button class="mode-btn" id="modo-3d" onclick="setModoMapa('3d')">3D</button>
             </div>
           </div>
+          <div id="map-data-origin" style="padding:4px 16px 6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;border-bottom:1px solid var(--border)"></div>
           <iframe id="map-frame"
             srcdoc="<p style='color:#8a8078;text-align:center;padding:3rem;font-family:Space Grotesk,sans-serif;font-size:13px'>Cargando mapa…</p>">
           </iframe>
+          <div id="deck-container" style="display:none;position:relative;height:432px;border-radius:0 0 2px 2px;overflow:hidden;background:#e8e0d4">
+            <canvas id="deck-canvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+            <div id="deck-tooltip" style="position:absolute;background:rgba(20,20,20,.85);color:#fff;padding:6px 10px;border-radius:3px;font-size:12px;line-height:1.5;pointer-events:none;display:none;z-index:10;"></div>
+            <div style="position:absolute;bottom:8px;left:12px;font-size:10px;color:#555;background:rgba(255,255,255,.6);padding:2px 6px;border-radius:2px;pointer-events:none">
+              Arrastrar · scroll · Shift+arrastrar para inclinar
+            </div>
+          </div>
         </div>
 
         <div class="card">
@@ -106,7 +116,7 @@
             <table class="table table-hover mb-0">
               <thead>
                 <tr>
-                  <th>#</th><th>Calle</th><th>Tipo</th><th>Congestión</th><th>Grupo</th>
+                  <th>#</th><th>Calle</th><th>Tipo</th><th>Congestión</th><th>K-Means</th><th>DBSCAN</th>
                 </tr>
               </thead>
               <tbody id="tabla-top5"></tbody>
@@ -131,6 +141,22 @@
 
   <!-- ══════════════════════════════════════════════════════ TAB CLUSTERS -->
   <div id="tab-clusters" class="tab-pane py-3">
+
+    <!-- Fila 0 — Métricas de calidad de los modelos -->
+    <div class="row g-3 mb-2">
+      <div class="col-12">
+        <div class="card">
+          <div class="section-title">
+            Calidad del modelo
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">métricas calculadas al iniciar el servidor</span>
+          </div>
+          <div id="model-metrics-row" class="metric-row">
+            <div class="metric-cell"><div class="metric-value" style="color:var(--muted)">—</div><div class="metric-label">Cargando…</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="row g-3">
 
       <div class="col-md-7">
@@ -205,6 +231,52 @@
         </div>
       </div>
     </div>
+    <!-- Fila 3 — DBSCAN espacial + Arquetipos NMF -->
+    <div class="row g-3 mt-1">
+
+      <!-- DBSCAN -->
+      <div class="col-md-5">
+        <div class="card">
+          <div class="section-title">
+            Clustering espacial — DBSCAN
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">ε = 500 m · haversine</span>
+          </div>
+          <div id="dbscan-stats-row" class="metric-row" style="border-bottom:1px solid var(--border)">
+            <div class="metric-cell"><div class="metric-value" style="color:var(--muted)">—</div><div class="metric-label">Cargando…</div></div>
+          </div>
+          <div id="dbscan-no-data" style="display:none;padding:16px;font-size:12px;color:var(--muted);text-align:center">
+            DBSCAN no identifica zonas compactas en esta zona (100% ruido con ε=500m)
+          </div>
+          <div class="p-2"><div id="chart-dbscan-scatter" style="height:240px"></div></div>
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" style="font-size:12px">
+              <thead>
+                <tr><th>Zona</th><th>N segs</th><th>Jam medio</th><th>Tipo vía</th></tr>
+              </thead>
+              <tbody id="tabla-dbscan"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- NMF Arquetipos -->
+      <div class="col-md-7">
+        <div class="card">
+          <div class="section-title">
+            Arquetipos NMF — 6 patrones base
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">perfil horario promedio (días reales)</span>
+          </div>
+          <div id="nmf-stats-row" style="padding:8px 16px;border-bottom:1px solid var(--border);font-size:11px;color:var(--muted)">Cargando…</div>
+          <div class="p-2"><div id="chart-nmf-archetypes" style="height:220px"></div></div>
+          <div class="section-title" style="border-top:1px solid var(--border);margin-top:2px;font-size:11px">
+            UMAP coloreado por arquetipo NMF dominante
+          </div>
+          <div class="p-2"><div id="chart-umap-nmf" style="height:180px"></div></div>
+        </div>
+      </div>
+
+    </div><!-- /fila 3 -->
+
   </div><!-- /tab-clusters -->
 
 
@@ -281,6 +353,7 @@
               <span class="method-tag">RMSE-CV ≈ 0.46</span>
               <span class="method-tag">domingo = baja confianza</span>
             </div>
+            <div id="method-live-03" class="mt-3" style="display:none;border-top:1px solid var(--border);padding-top:10px"></div>
           </div>
         </div>
 
@@ -302,6 +375,7 @@
               <span class="method-tag">86–96 % varianza</span>
               <span class="method-tag">n_neighbors = 15</span>
             </div>
+            <div id="method-live-04" class="mt-3" style="display:none;border-top:1px solid var(--border);padding-top:10px"></div>
           </div>
         </div>
 
@@ -322,6 +396,7 @@
               <span class="method-tag">min_samples = 5</span>
               <span class="method-tag">~ 2 % outliers</span>
             </div>
+            <div id="method-live-05" class="mt-3" style="display:none;border-top:1px solid var(--border);padding-top:10px"></div>
           </div>
         </div>
 
@@ -343,11 +418,26 @@
               <span class="method-tag">n_init = 20</span>
               <span class="method-tag">27 / 223 segs (La Paz)</span>
             </div>
+            <div id="method-live-06" class="mt-3" style="display:none;border-top:1px solid var(--border);padding-top:10px"></div>
           </div>
         </div>
 
       </div>
     </div>
+
+    <!-- Gráfico comparativo días reales vs sintéticos -->
+    <div class="row justify-content-center mt-4">
+      <div class="col-lg-10">
+        <div class="card">
+          <div class="section-title">
+            Comparación días reales vs sintéticos — NMF + PCHIP
+            <span style="font-size:10px;font-weight:400;color:var(--muted)">perfil promedio jam_factor · 24 horas · línea sólida = real, punteada = estimado</span>
+          </div>
+          <div class="p-2"><div id="chart-synthetic-days" style="height:280px"></div></div>
+        </div>
+      </div>
+    </div>
+
   </div><!-- /tab-metodos -->
 
 </div>
@@ -480,11 +570,40 @@ function updateDiaWarning(dia) {
   document.getElementById('dia-warning').style.display =
     DIAS_SINTETICOS.includes(dia) ? 'block' : 'none';
 }
+function renderDataOriginBanner(dia, modo) {
+  const esSint = DIAS_SINTETICOS.includes(dia);
+  const tagStyle = (color) =>
+    `display:inline-block;border:1px solid ${color};color:${color};`
+    + `padding:1px 7px;border-radius:3px;font-size:10px;font-weight:600;margin-right:4px`;
+  let html = `<span style="font-size:10px;color:var(--muted);margin-right:4px">Origen:</span>`;
+  if (modo === 'dbscan') {
+    html += `<span style="${tagStyle('#e87722')}">DBSCAN (zonas espaciales)</span>`;
+  } else if (modo === '3d') {
+    html += esSint
+      ? `<span style="${tagStyle('#e87722')}">NMF + PCHIP (día estimado)</span>`
+      : `<span style="${tagStyle('#1565c0')}">API cruda (dato real)</span>`;
+    html += `<span style="${tagStyle('#dc2626')}">K-Means (color)</span>`;
+    html += `<span style="${tagStyle('#7c3aed')}">deck.gl 3D</span>`;
+  } else {
+    html += esSint
+      ? `<span style="${tagStyle('#e87722')}">NMF + PCHIP (día estimado)</span>`
+      : `<span style="${tagStyle('#1565c0')}">API cruda (dato real)</span>`;
+    if (modo !== 'promedio') {
+      html += `<span style="${tagStyle('#dc2626')}">K-Means (grupos)</span>`;
+    }
+  }
+  document.getElementById('map-data-origin').innerHTML = html;
+}
+
 function setModoMapa(modo) {
   _modoMapa = modo;
   document.getElementById('modo-hora').classList.toggle('active', modo === 'hora');
   document.getElementById('modo-prom').classList.toggle('active', modo === 'promedio');
-  document.getElementById('hora-section').style.display = modo === 'promedio' ? 'none' : '';
+  document.getElementById('modo-dbscan').classList.toggle('active', modo === 'dbscan');
+  document.getElementById('modo-3d').classList.toggle('active', modo === '3d');
+  document.getElementById('hora-section').style.display = (modo === 'hora' || modo === '3d') ? '' : 'none';
+  document.getElementById('map-frame').style.display     = (modo === '3d') ? 'none' : '';
+  document.getElementById('deck-container').style.display = (modo === '3d') ? '' : 'none';
   refresh();
 }
 
@@ -495,19 +614,21 @@ async function loadMap(f) {
   if (_modoMapa === 'promedio') {
     url = `/map-promedio?zona=${f.zona}`;
     subtitleText = `${zonaL} · promedio histórico`;
+  } else if (_modoMapa === 'dbscan') {
+    url = `/map-dbscan?zona=${f.zona}`;
+    subtitleText = `${zonaL} · clusters espaciales DBSCAN`;
   } else {
     url = `/map?hora=${f.hora}&dia=${f.dia}&cluster=${f.cluster}&zona=${f.zona}`;
-    const cl = f.cluster === -1 ? 'todas las calles'
-      : (CLUSTER_INFO[String(f.cluster)] || `Cluster ${f.cluster}`);
     const esSint = DIAS_SINTETICOS.includes(f.dia);
     subtitleText = `${zonaL} · ${f.dia.charAt(0).toUpperCase()+f.dia.slice(1)} `
       + `${String(f.hora).padStart(2,'0')}:00`
-      + (esSint ? ' · estimado' : '');
+      + (esSint ? ' · estimado NMF' : '');
   }
   const res  = await fetch(url);
   const html = await res.text();
   document.getElementById('map-frame').srcdoc = html;
   document.getElementById('map-subtitle').textContent = subtitleText;
+  renderDataOriginBanner(f.dia, _modoMapa);
 }
 
 /* ── Métricas ───────────────────────────────────────────────────────── */
@@ -529,6 +650,10 @@ async function loadTop5(f) {
     const jam     = parseFloat(r.jam_factor);
     const clr     = jam > 0.3 ? MM.red : MM.green;
     const pct     = Math.min(100, jam * 220).toFixed(0);
+    const clEsp = r.cluster_espacial;
+    const dbscanCell = clEsp !== undefined && clEsp !== -1
+      ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700">zona ${clEsp}</span>`
+      : `<span style="font-size:10px;color:var(--muted)">ruido</span>`;
     return `<tr style="cursor:pointer" id="row-${r.segment_id}" onclick="selectSegmento(${r.segment_id})">
       <td style="color:var(--muted);font-variant-numeric:tabular-nums;font-weight:500">${i+1}</td>
       <td style="font-weight:500">${r.nombre}</td>
@@ -541,6 +666,7 @@ async function loadTop5(f) {
         </div>
       </td>
       <td>${dotBadge(esAlto)}</td>
+      <td>${dbscanCell}</td>
     </tr>`;
   }).join('');
 }
@@ -588,13 +714,16 @@ async function loadSegmento(sid) {
           <div style="font-size:10px;color:var(--muted);font-weight:500;margin-top:1px">longitud</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:12px">
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px;font-size:12px;flex-wrap:wrap">
         <span style="background:var(--bg);border:1px solid var(--border);border-radius:20px;
                      padding:2px 9px;font-size:11px;color:var(--muted)">${hwLabel}</span>
         ${dotBadge(d.cluster_temporal === CLUSTER_ALTO)}
+        ${d.cluster_espacial !== undefined && d.cluster_espacial !== -1
+          ? `<span style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:700">DBSCAN zona ${d.cluster_espacial}</span>`
+          : `<span style="background:var(--bg);border:1px solid var(--border);border-radius:20px;padding:2px 9px;font-size:11px;color:var(--muted)">DBSCAN: ruido</span>`}
       </div>
       <div style="font-size:10px;color:var(--muted);margin-bottom:12px;line-height:1.4">
-        Clasificación por perfil histórico — no refleja un momento concreto
+        K-Means: perfil temporal · DBSCAN: zona geográfica
       </div>
       <div id="chart-segmento" style="height:210px"></div>
     </div>`;
@@ -618,11 +747,122 @@ window.addEventListener('message', e => {
   if (e.data && e.data.type === 'segment_click') loadSegmento(e.data.segment_id);
 });
 
+/* ── Vista 3D deck.gl ───────────────────────────────────────────────── */
+let _deckInstance = null, _deckZona = null;
+
+async function ensureDeckGL() {
+  if (window.deck) return;
+  await new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://unpkg.com/deck.gl@8.9.35/dist.min.js';
+    s.onload = resolve; s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function loadDeck3D(f) {
+  await ensureDeckGL();
+  const segments = await fetch(
+    `/segments-3d?zona=${f.zona}&dia=${f.dia}&hora=${f.hora}`
+  ).then(r => r.json());
+  const tooltip = document.getElementById('deck-tooltip');
+
+  const tileLayer = new deck.TileLayer({
+    id: 'basemap',
+    data: 'https://a.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    minZoom: 0, maxZoom: 19, tileSize: 256,
+    renderSubLayers: props => {
+      const { bbox: { west, south, east, north } } = props.tile;
+      return new deck.BitmapLayer(props, {
+        data: null, image: props.data,
+        bounds: [west, south, east, north]
+      });
+    }
+  });
+
+  const colLayer = new deck.ColumnLayer({
+    id: 'jam-cols',
+    data: segments,
+    diskResolution: 6,
+    radius: 28,
+    extruded: true,
+    pickable: true,
+    elevationScale: 600,
+    getPosition: d => [d.lon, d.lat],
+    getElevation: d => d.jam,
+    getFillColor: d => {
+      const t = Math.min(d.jam / 2, 1);
+      return [
+        Math.round(26  + (224 - 26)  * t),
+        Math.round(158 + (32  - 158) * t),
+        Math.round(92  + (32  - 92)  * t),
+        210
+      ];
+    },
+    onHover: ({ object, x, y }) => {
+      if (object) {
+        Object.assign(tooltip.style, {
+          display: 'block', left: (x + 14) + 'px', top: (y - 12) + 'px'
+        });
+        const cl    = object.cluster_temporal === CLUSTER_ALTO ? 'Alta' : 'Baja';
+        const clClr = object.cluster_temporal === CLUSTER_ALTO ? '#dc2626' : '#16a34a';
+        const diff  = object.jam - object.jam_mean;
+        const sign  = diff >= 0 ? '+' : '';
+        const dClr  = diff > 0.05 ? '#e02020' : diff < -0.05 ? '#1a9e5c' : '#8a8078';
+        const barW  = Math.min(100, object.jam * 125).toFixed(0);
+        const barClr = object.jam > 1 ? '#e02020' : object.jam > 0.3 ? '#f4b942' : '#1a9e5c';
+        const streetName = object.name || object.highway || 'Calle';
+        tooltip.innerHTML =
+          `<div style="font-size:13px;font-weight:700;margin-bottom:5px">`
+          + `${streetName}</div>`
+          + `<div style="background:#444;border-radius:2px;height:3px;margin-bottom:5px">`
+          + `<div style="background:${barClr};width:${barW}%;height:3px;border-radius:2px"></div></div>`
+          + `<div style="font-size:12px;line-height:1.7">`
+          + `jam hora&nbsp;&nbsp;<b style="color:${barClr}">${object.jam.toFixed(3)}</b>`
+          + `&ensp;<span style="color:${dClr};font-size:10px">(${sign}${diff.toFixed(3)} vs hist)</span></div>`
+          + `<div style="font-size:11px;color:#aaa">jam hist: ${object.jam_mean.toFixed(3)}</div>`
+          + `<div style="margin-top:6px"><span style="color:${clClr};font-weight:700;font-size:11px">`
+          + `${cl} congestión</span></div>`;
+      } else { tooltip.style.display = 'none'; }
+    }
+  });
+
+  const CENTERS = {
+    lapaz:   [-68.130, -16.505],
+    el_alto: [-68.187, -16.502],
+    ambas:   [-68.155, -16.504]
+  };
+  const [lon, lat] = CENTERS[f.zona] || CENTERS.lapaz;
+
+  if (_deckInstance && f.zona === _deckZona) {
+    _deckInstance.setProps({ layers: [tileLayer, colLayer] });
+  } else {
+    if (_deckInstance) { _deckInstance.finalize(); _deckInstance = null; }
+    _deckInstance = new deck.Deck({
+      canvas: 'deck-canvas',
+      width: '100%', height: '100%',
+      initialViewState: {
+        longitude: lon, latitude: lat,
+        zoom: 13, pitch: 50, bearing: -10
+      },
+      controller: true,
+      layers: [tileLayer, colLayer]
+    });
+    _deckZona = f.zona;
+  }
+
+  const zonaL = { lapaz: 'La Paz', el_alto: 'El Alto', ambas: 'Ambas' }[f.zona] || f.zona;
+  document.getElementById('map-subtitle').textContent =
+    `${zonaL} · 3D · ${String(f.hora).padStart(2, '0')}:00`;
+  renderDataOriginBanner(f.dia, '3d');
+}
+
 /* ── Refresh principal ──────────────────────────────────────────────── */
 async function refresh() {
   const f = getFilters();
   setLoading(true);
-  await Promise.all([loadMap(f), loadMetricas(f), loadTop5(f)]);
+  const mapPromise = (_modoMapa === '3d') ? loadDeck3D(f) : loadMap(f);
+  await Promise.all([mapPromise, loadMetricas(f), loadTop5(f)]);
   const [perfilRes, metrRes] = await Promise.all([
     fetch(`/perfil?cluster=-1&dia=${f.dia}&zona=${f.zona}`),
     fetch(`/metricas?hora=${f.hora}&dia=${f.dia}&cluster=-1&zona=${f.zona}`)
@@ -707,7 +947,10 @@ async function loadClusters() {
     </tr>`;
   }).join('');
 
-  await Promise.all([loadClusterPerfil(), loadPCA(), loadHeatmap(TIPOS_DIA[0]), loadViolin(d.points)]);
+  await Promise.all([
+    loadClusterPerfil(), loadPCA(), loadHeatmap(TIPOS_DIA[0]), loadViolin(d.points),
+    loadModelMetrics(), loadDBSCAN(), loadNMFArchetypes(),
+  ]);
   window._clustersLoaded = true;
 }
 
@@ -812,6 +1055,282 @@ function loadViolin(points) {
     yaxis: { ...layout0.yaxis, title: 'jam_mean', range: [0, null] },
     violinmode: 'group',
   }, { responsive: true, displayModeBar: false });
+}
+
+/* ── Métricas de modelo ─────────────────────────────────────────────── */
+async function loadModelMetrics() {
+  const zona = document.getElementById('zona-select').value;
+  const res  = await fetch(`/model-metrics?zona=${zona}`);
+  const m    = await res.json();
+  const cells = [
+    { v: m.kmeans_silhouette  !== null ? m.kmeans_silhouette.toFixed(3)  : 'N/A',
+      label: 'Silhouette K-Means', color: MM.red,
+      title: 'Compacidad y separación de los clusters temporales. Rango [-1, 1]; mayor = mejor.' },
+    { v: m.dbscan_silhouette  !== null ? m.dbscan_silhouette.toFixed(3)  : 'N/A',
+      label: 'Silhouette DBSCAN', color: MM.orange,
+      title: 'Solo segmentos no-ruido. ' + (m.dbscan_n_clusters||0) + ' zonas, ' + (m.dbscan_noise_pct||0) + '% ruido.' },
+    { v: m.pca_variance_pct   !== null ? m.pca_variance_pct.toFixed(1) + '%' : 'N/A',
+      label: `Varianza PCA (${m.pca_n_components||13} PCs)`, color: MM.blue,
+      title: 'Varianza retenida tras reducir de 168 a ' + (m.pca_n_components||13) + ' dimensiones.' },
+    { v: m.nmf_rmse_interpolado !== null ? m.nmf_rmse_interpolado.toFixed(3) : 'N/A',
+      label: 'RMSE-CV NMF (interp.)', color: MM.green,
+      title: 'Error de reconstrucción en martes y jueves (interpolación PCHIP).' },
+    { v: m.nmf_rmse_extrapolado !== null ? m.nmf_rmse_extrapolado.toFixed(3) : 'N/A',
+      label: 'RMSE-CV NMF (extrap.)', color: MM.yellow,
+      title: 'Error de reconstrucción en domingo (extrapolación PCHIP).' },
+  ];
+  document.getElementById('model-metrics-row').innerHTML = cells.map(c =>
+    `<div class="metric-cell" title="${c.title}">
+       <div class="metric-value" style="color:${c.color};font-size:22px">${c.v}</div>
+       <div class="metric-label">${c.label}</div>
+     </div>`
+  ).join('');
+}
+
+/* ── DBSCAN ─────────────────────────────────────────────────────────── */
+const _DBSCAN_PAL = ['#1565c0','#1a9e5c','#e02020','#e87722','#f4b942',
+                     '#9b59b6','#00bcd4','#ff5722','#795548','#607d8b','#8bc34a','#3f51b5'];
+
+async function loadDBSCAN() {
+  const zona = document.getElementById('zona-select').value;
+  const res  = await fetch(`/dbscan-data?zona=${zona}`);
+  const d    = await res.json();
+
+  // Stats
+  document.getElementById('dbscan-stats-row').innerHTML = [
+    { v: d.n_clusters_reales, label: 'zonas DBSCAN', color: MM.orange },
+    { v: d.noise_pct + '%',   label: 'puntos ruido',  color: 'var(--muted)' },
+  ].map(c =>
+    `<div class="metric-cell">
+       <div class="metric-value" style="color:${c.color};font-size:22px">${c.v}</div>
+       <div class="metric-label">${c.label}</div>
+     </div>`
+  ).join('');
+
+  if (d.n_clusters_reales === 0) {
+    document.getElementById('dbscan-no-data').style.display = '';
+    document.getElementById('chart-dbscan-scatter').style.display = 'none';
+    document.getElementById('tabla-dbscan').innerHTML =
+      '<tr><td colspan="4" style="color:var(--muted);font-size:11px;padding:8px">Sin clusters espaciales (100% ruido)</td></tr>';
+    return;
+  }
+
+  // Scatter lat/lon coloreado por cluster_espacial
+  const byCluster = {};
+  d.clusters.forEach(cl => {
+    const key = cl.es_ruido ? -1 : cl.cluster_id;
+    if (!byCluster[key]) byCluster[key] = { lats:[], lons:[], tips:[], es_ruido: cl.es_ruido };
+    cl.segmentos.forEach(s => {
+      byCluster[key].lats.push(s.lat);
+      byCluster[key].lons.push(s.lon);
+      byCluster[key].tips.push(`Seg ${s.segment_id} · ${s.highway}`);
+    });
+  });
+  const dbTraces = Object.entries(byCluster).map(([cid, pts]) => {
+    const isNoise = parseInt(cid) === -1;
+    const color   = isNoise ? '#cccccc' : _DBSCAN_PAL[parseInt(cid) % _DBSCAN_PAL.length];
+    return {
+      x: pts.lons, y: pts.lats,
+      mode: 'markers', name: isNoise ? 'Ruido' : `Zona ${cid}`,
+      marker: { color, size: isNoise ? 3 : 7, opacity: isNoise ? 0.25 : 0.85 },
+      text: pts.tips,
+      hovertemplate: '%{text}<extra></extra>',
+    };
+  });
+  Plotly.newPlot('chart-dbscan-scatter', dbTraces, {
+    ...layout0,
+    xaxis: { ...layout0.xaxis, title: 'Longitud' },
+    yaxis: { ...layout0.yaxis, title: 'Latitud' },
+    showlegend: true,
+    legend: { font: { size: 10 } },
+  }, { responsive: true, displayModeBar: false });
+
+  // Tabla (solo clusters reales)
+  document.getElementById('tabla-dbscan').innerHTML = d.clusters
+    .filter(c => !c.es_ruido)
+    .map(c => {
+      const color = _DBSCAN_PAL[c.cluster_id % _DBSCAN_PAL.length];
+      return `<tr>
+        <td><span style="display:inline-block;width:8px;height:8px;border-radius:50%;
+             background:${color};margin-right:5px"></span>Zona ${c.cluster_id}</td>
+        <td style="font-weight:600">${c.n_segmentos}</td>
+        <td style="color:${c.jam_medio > 0.3 ? MM.red : MM.green};font-weight:700">
+          ${c.jam_medio.toFixed(3)}</td>
+        <td style="font-size:11px;color:var(--muted)">${hwLabels[c.highway_dominante] || c.highway_dominante}</td>
+      </tr>`;
+    }).join('');
+}
+
+/* ── NMF Arquetipos ─────────────────────────────────────────────────── */
+const _ARCH_COLORS = [MM.red, MM.blue, MM.green, MM.orange, MM.yellow, '#9b59b6'];
+
+async function loadNMFArchetypes() {
+  const res = await fetch('/nmf-archetypes?zona=lapaz');
+  const d   = await res.json();
+  if (!d.arquetipos.length) return;
+
+  // Stats de distribución
+  const distStr = Object.entries(d.distribucion)
+    .map(([k,v]) => `A${k}: ${v} segs`).join(' · ');
+  document.getElementById('nmf-stats-row').textContent = distStr;
+
+  // Líneas de 6 arquetipos
+  const archTraces = d.arquetipos.map((a, i) => ({
+    x: d.horas, y: a.profile,
+    name: `A${a.id} (pico ${a.peak_hour_label})`,
+    mode: 'lines', line: { color: _ARCH_COLORS[i], width: 2.5 },
+    hovertemplate: `A${a.id} · %{x}:00h<br>activación: %{y:.3f}<extra></extra>`,
+  }));
+  Plotly.newPlot('chart-nmf-archetypes', archTraces, {
+    ...layout0,
+    xaxis: { ...layout0.xaxis, title: 'Hora', dtick: 4 },
+    yaxis: { ...layout0.yaxis, title: 'Activación NMF' },
+    showlegend: true, legend: { font: { size: 10 } },
+  }, { responsive: true, displayModeBar: false });
+
+  // UMAP coloreado por arquetipo dominante
+  const byArch = {};
+  d.puntos.forEach(p => {
+    const k = p.dominant_archetype;
+    if (!byArch[k]) byArch[k] = { x:[], y:[], ids:[] };
+    byArch[k].x.push(p.umap_x);
+    byArch[k].y.push(p.umap_y);
+    byArch[k].ids.push(p.segment_id);
+  });
+  const umapNmfTraces = Object.entries(byArch).map(([k, pts]) => ({
+    x: pts.x, y: pts.y, mode: 'markers', name: `A${k}`,
+    marker: { color: _ARCH_COLORS[parseInt(k) % _ARCH_COLORS.length], size: 5, opacity: 0.75 },
+    text: pts.ids.map(id => `Seg ${id}`),
+    hovertemplate: '%{text} · A' + k + '<extra></extra>',
+  }));
+  Plotly.newPlot('chart-umap-nmf', umapNmfTraces, {
+    ...layout0,
+    margin: { t:8, b:35, l:44, r:12 },
+    xaxis: { ...layout0.xaxis, title: 'UMAP 1' },
+    yaxis: { ...layout0.yaxis, title: 'UMAP 2' },
+    showlegend: true, legend: { font: { size: 10 } },
+  }, { responsive: true, displayModeBar: false });
+}
+
+/* ── Tab Métodos: datos vivos ───────────────────────────────────────── */
+window._metodosLoaded = false;
+
+async function loadMetodosLive() {
+  if (window._metodosLoaded) return;
+  const [metrRes, synRes, pcaRes] = await Promise.all([
+    fetch('/model-metrics?zona=lapaz'),
+    fetch('/synthetic-days?zona=lapaz'),
+    fetch('/pca-data?zona=lapaz'),
+  ]);
+  const m   = await metrRes.json();
+  const syn = await synRes.json();
+  const pca = await pcaRes.json();
+
+  // Paso 03 — NMF: tabla de días con tipo y confianza
+  const confColor = { alta: MM.green, media: MM.yellow, baja: MM.red };
+  const el03 = document.getElementById('method-live-03');
+  if (el03 && syn.dias.length) {
+    el03.innerHTML =
+      `<table style="width:100%;font-size:11px;border-collapse:collapse">
+        <tr style="color:var(--muted);font-size:10px">
+          <th style="text-align:left;padding:3px 8px">Día</th>
+          <th style="text-align:left">Tipo</th>
+          <th style="text-align:left">RMSE-CV</th>
+          <th style="text-align:left">Confianza</th>
+        </tr>
+        ${syn.dias.map(d =>
+          `<tr style="border-top:1px solid var(--border)">
+            <td style="padding:4px 8px;font-weight:600">
+              ${d.dia.charAt(0).toUpperCase()+d.dia.slice(1)}</td>
+            <td style="color:${d.tipo==='real'?MM.green:d.tipo==='interpolado'?MM.yellow:MM.red}">
+              ${d.tipo}</td>
+            <td style="font-variant-numeric:tabular-nums">
+              ${d.rmse_cv > 0 ? d.rmse_cv.toFixed(3) : '—'}</td>
+            <td style="color:${confColor[d.confianza]||MM.muted};font-weight:600">
+              ${d.confianza}</td>
+          </tr>`
+        ).join('')}
+      </table>`;
+    el03.style.display = '';
+  }
+
+  // Paso 04 — PCA: varianza y top PCs
+  const el04 = document.getElementById('method-live-04');
+  if (el04 && pca.variance_ratio.length) {
+    const cumPct  = (pca.cumulative.slice(-1)[0]*100).toFixed(1);
+    const topPCs  = pca.variance_ratio.slice(0,5)
+      .map((v,i) => `PC${i+1}: ${(v*100).toFixed(1)}%`).join(' · ');
+    el04.innerHTML =
+      `<div style="font-size:12px;color:var(--text);line-height:1.8">
+         <strong style="color:${MM.blue};font-size:18px">${cumPct}%</strong>
+         <span style="color:var(--muted);font-size:11px"> varianza en ${pca.variance_ratio.length} PCs</span><br>
+         <span style="font-size:10px;color:var(--muted)">${topPCs}</span>
+       </div>`;
+    el04.style.display = '';
+  }
+
+  // Paso 05 — DBSCAN
+  const el05 = document.getElementById('method-live-05');
+  if (el05) {
+    el05.innerHTML =
+      `<div style="display:flex;gap:20px;flex-wrap:wrap">
+         <div>
+           <div style="font-size:22px;font-weight:700;color:${MM.orange}">${m.dbscan_n_clusters||0}</div>
+           <div style="font-size:10px;color:var(--muted)">zonas detectadas</div>
+         </div>
+         <div>
+           <div style="font-size:22px;font-weight:700;color:var(--muted)">${m.dbscan_noise_pct||0}%</div>
+           <div style="font-size:10px;color:var(--muted)">puntos ruido</div>
+         </div>
+         <div>
+           <div style="font-size:22px;font-weight:700;color:${MM.orange}">
+             ${m.dbscan_silhouette !== null ? m.dbscan_silhouette.toFixed(3) : 'N/A'}</div>
+           <div style="font-size:10px;color:var(--muted)">silhouette score</div>
+         </div>
+       </div>`;
+    el05.style.display = '';
+  }
+
+  // Paso 06 — K-Means
+  const el06 = document.getElementById('method-live-06');
+  if (el06) {
+    el06.innerHTML =
+      `<div style="display:flex;gap:20px;flex-wrap:wrap">
+         <div>
+           <div style="font-size:22px;font-weight:700;color:${MM.red}">
+             ${m.kmeans_silhouette !== null ? m.kmeans_silhouette.toFixed(3) : 'N/A'}</div>
+           <div style="font-size:10px;color:var(--muted)">silhouette score</div>
+         </div>
+         <div>
+           <div style="font-size:22px;font-weight:700;color:${MM.red}">2</div>
+           <div style="font-size:10px;color:var(--muted)">clusters (k óptimo)</div>
+         </div>
+       </div>`;
+    el06.style.display = '';
+  }
+
+  // Gráfico días reales vs sintéticos
+  const lineStyle = { real: 'solid', interpolado: 'dash', extrapolado: 'dot' };
+  const dayColors = [MM.blue, MM.red, MM.green, MM.orange, MM.yellow, '#9b59b6', '#795548'];
+  const synTraces = syn.dias.map((d, i) => ({
+    x: syn.horas, y: d.profile,
+    name: d.dia.charAt(0).toUpperCase()+d.dia.slice(1) + (d.tipo !== 'real' ? ` (${d.tipo})` : ''),
+    mode: 'lines',
+    line: { color: dayColors[i % dayColors.length],
+            width: d.tipo === 'real' ? 2.5 : 1.5,
+            dash: lineStyle[d.tipo] || 'solid' },
+    hovertemplate: `${d.dia} · %{x}h<br>jam: %{y:.3f}<br>${d.tipo}<extra></extra>`,
+  }));
+  if (document.getElementById('chart-synthetic-days')) {
+    Plotly.newPlot('chart-synthetic-days', synTraces, {
+      ...layout0,
+      xaxis: { ...layout0.xaxis, title: 'Hora', dtick: 4 },
+      yaxis: { ...layout0.yaxis, title: 'jam_factor promedio', range: [0, null] },
+      showlegend: true, legend: { font: { size: 11 } },
+    }, { responsive: true, displayModeBar: false });
+  }
+
+  window._metodosLoaded = true;
 }
 
 /* Listeners */

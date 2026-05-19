@@ -319,6 +319,7 @@
         btn.classList.add('active');
         document.getElementById('tab-' + tab).classList.add('active');
         if (tab === 'clusters' && !window._clustersLoaded) loadClusters();
+        if (tab === 'metodos'  && !window._metodosLoaded)  loadMetodosLive();
       });
     });
 

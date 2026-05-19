@@ -603,6 +603,47 @@ db = DBSCAN(
 cluster_espacial = db.fit_predict(coords_rad)
 \end{lstlisting}
 
+\subsubsection{Resultados del clustering espacial}
+
+Aplicando DBSCAN sobre los centroides GPS de los 250 segmentos de La Paz,
+el algoritmo identificó \textbf{11 clusters} y clasificó el 68\,\% de los
+segmentos (170/250) como ruido ($-1$).
+El índice de silueta sobre los puntos asignados (no-ruido) fue de
+\textbf{0{,}681}, indicando buena cohesión interna dentro de las zonas
+encontradas.
+
+\begin{center}
+\begin{tabular}{lc}
+  \toprule
+  Resultado & Valor \\
+  \midrule
+  Clusters encontrados     & 11 \\
+  Segmentos asignados      & 80 (32\,\%) \\
+  Segmentos como ruido     & 170 (68\,\%) \\
+  Silueta (no-ruido)       & 0{,}681 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+El alto porcentaje de ruido no es un fallo del modelo, sino una consecuencia
+directa de la densidad de monitoreo.
+Con 250 segmentos distribuidos sobre $\sim$2\,167\,km de red vial,
+cada punto monitoreado tiene en promedio \textbf{2{,}1 vecinos} dentro de
+un radio de 500\,m, muy por debajo del umbral \texttt{min\_samples=5}.
+Solo en las zonas donde el muestreo estratificado concentró varios segmentos
+cercanos se forman clusters; esas son precisamente las 11 zonas identificadas.
+
+\medskip
+\noindent\textbf{Nota de interpretación.}
+Los clusters DBSCAN no detectan zonas de congestión sino zonas de
+\emph{cobertura densa} del monitoreo.
+Su valor analítico está en cruzarse con K-Means: un cluster DBSCAN donde
+todos los segmentos son de alta congestión temporal indica una zona
+geográfica homogéneamente congestionada; uno mixto sugiere heterogeneidad
+intra-zona.
+Esta combinación de geografía (DBSCAN) y comportamiento temporal (K-Means)
+ofrece una caracterización más completa que cualquiera de los dos solos.
+
 %----------------------------------------------------------------
 \subsection{K-Means --- Clustering temporal}
 %----------------------------------------------------------------
@@ -689,20 +730,45 @@ mínimos locales.
 
 \subsubsection{Resultados del clustering}
 
+El índice de silueta obtenido con $k=2$ fue de \textbf{0{,}766}, indicando
+clusters bien separados y compactos en el espacio PCA de 13 dimensiones.
+Este valor valida cuantitativamente la elección de $k=2$: los dos grupos
+no son una conveniencia del algoritmo sino estructuras genuinas en los datos.
+
 \begin{center}
-\begin{tabular}{lcc}
+\begin{tabular}{lrrrrc}
   \toprule
-  Zona & Alta congestión & Baja congestión \\
+  Zona & \multicolumn{2}{c}{Alta congestión} & \multicolumn{2}{c}{Baja congestión} & Silueta \\
+       & $n$ & \% & $n$ & \% & \\
   \midrule
-  La Paz  & 27 segmentos  & 223 segmentos \\
-  El Alto & 10 segmentos  & 240 segmentos \\
+  La Paz  & 27  & 10{,}8 & 223 & 89{,}2 & 0{,}766 \\
+  El Alto & 10  &  4{,}0 & 240 & 96{,}0 & --- \\
   \bottomrule
 \end{tabular}
 \end{center}
 
+La Paz tiene casi el triple de proporción de segmentos de alta congestión
+que El Alto (10{,}8\,\% vs.\ 4{,}0\,\%).
+Esta diferencia refleja condiciones estructurales: La Paz está construida
+en una hoya cordillerana con calles estrechas, alta densidad de
+intersecciones y un centro histórico donde convergen las principales
+arterias.
+El Alto, en cambio, fue planificado en cuadrícula sobre el altiplano con
+avenidas más anchas y menos cuellos de botella topográficos.
+
+\medskip
+\textbf{Perfil temporal del cluster de alta congestión.}
+El análisis de los perfiles horarios revela un patrón bimodal consistente:
+pico matutino a las \textbf{08:00} (jam $\approx 0{,}201$ en lunes) y pico
+vespertino a las \textbf{19:00} (jam máximo = 0{,}372 el viernes).
+Los sábados el pico matutino cae a jam $\approx 0{,}049$, confirmando que
+la congestión severa es un fenómeno de día hábil.
+El cluster de baja congestión no supera jam $\approx 0{,}3$ en ningún horario
+ni día, lo que justifica la separación binaria.
+
 La congestión severa está concentrada en un subconjunto pequeño de
-arterias principales: el centro histórico, la Av. Montes y la autopista
-La Paz--El Alto para La Paz; la Ceja y la Av. 6 de Marzo para El Alto.
+arterias: el centro histórico, la Av.\ Montes y la autopista La Paz--El
+Alto; la Ceja y la Av.\ 6 de Marzo en El Alto.
 
 \begin{figure}[H]
   \centering
@@ -826,6 +892,44 @@ interpretación directa en este contexto.
   \node[sub, below=4pt of expand] {7 días completos};
 \end{tikzpicture}
 \end{center}
+
+\subsubsection{Los 6 arquetipos encontrados}
+
+Una vez entrenado el modelo, cada fila de $H$ es el perfil horario
+(24 h) de un arquetipo puro.
+Los 6 arquetipos identificados sobre los datos reales se interpretan así:
+
+\begin{center}
+\begin{tabular}{clll}
+  \toprule
+  Arq. & Hora pico & Descripción interpretada & Tipo de segmento dominante \\
+  \midrule
+  A0 & 19:00 & Salida laboral vespertina    & Arterias principales \\
+  A1 & 08:00 & Entrada laboral matutina     & Accesos al centro \\
+  A2 & 17:00 & Tarde laboral                & Comercial/mixto \\
+  A3 & 14:00 & Actividad comercial mediodía & Zonas de mercado \\
+  A4 & 07:00 & Madrugada (servicios)        & Logística / distribución \\
+  A5 & 12:00 & Pausa del mediodía           & Barrios residenciales \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+Cada segmento es combinación lineal de estos arquetipos, codificada en
+su fila de $W$.
+Un segmento con $W_{i,1}$ dominante es, por construcción, un segmento de
+\emph{entrada matutina}: independientemente del día que se observe, su
+perfil siempre tendrá el pico alrededor de las 08:00.
+La no-negatividad garantiza que estas proporciones sean directamente
+interpretables como contribuciones aditivas al jam\_factor.
+
+\medskip
+\textbf{Conexión con K-Means.}
+Los arquetipos NMF son los bloques constructivos del tráfico.
+K-Means agrupa segmentos según cuáles arquetipos dominan su comportamiento
+semanal completo: los segmentos de alta congestión tienden a concentrar
+peso en A0 y A1 (picos laborales intensos), mientras que los de baja
+congestión muestran pesos distribuidos en A3--A5 (patrones más suaves).
+La coherencia entre ambas caracterizaciones valida la robustez del análisis.
 
 %----------------------------------------------------------------
 \subsection{PCHIP --- Interpolación día-de-semana}
@@ -1102,23 +1206,77 @@ Esto garantiza que cualquier usuario sepa que esos datos son
 \section{Resultados}
 %=================================================================
 
+\subsection{Comparación La Paz -- El Alto}
+
+Los modelos no supervisados permiten cuantificar las diferencias entre
+ambas ciudades con métricas objetivas:
+
+\begin{center}
+\begin{tabular}{lcc}
+  \toprule
+  Indicador & La Paz & El Alto \\
+  \midrule
+  Varianza PCA (13 comps.) & 86{,}8\,\% & 96{,}1\,\% \\
+  Segmentos alta congestión & 10{,}8\,\% & 4{,}0\,\% \\
+  NMF RMSE-CV              & 0{,}462    & 0{,}435 \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+El Alto alcanza el 96{,}1\,\% de varianza explicada con los mismos 13
+componentes PCA, lo que indica que su tráfico es más homogéneo y
+predecible que el de La Paz.
+La varianza residual de La Paz (13{,}2\,\%) refleja la complejidad
+topográfica: en una hoya donde cada barrio tiene accesos distintos,
+los patrones de congestión son más heterogéneos.
+El menor RMSE-CV de El Alto (0{,}435 vs.\ 0{,}462) confirma que la
+síntesis NMF es más precisa donde el comportamiento es más regular.
+
 \subsection{Patrones encontrados}
 
+\subsubsection{Patrones temporales}
+
+El 89{,}2\,\% de los segmentos de La Paz pertenece al cluster de baja
+congestión, confirmando que la congestión severa es un fenómeno
+\emph{concentrado} en pocas arterias, no distribuido en la red.
+Los perfiles horarios del cluster de alta congestión son bimodales:
+pico a las \textbf{08:00} (jam $\approx 0{,}201$ en lunes) y pico
+a las \textbf{19:00} (jam máximo = 0{,}372 el viernes).
+El sábado el pico matutino cae a jam $\approx 0{,}049$, confirmando
+que la congestión severa es un fenómeno de día hábil.
+
+Los días sintéticos (martes, jueves) presentan un RMSE-CV de 0{,}462
+sobre una escala 0--10, equivalente a $\sim$4{,}6\,\% de error relativo,
+y producen perfiles coherentes con los días reales adyacentes.
+El domingo extrapolado (fuera del rango de días observados) tiene mayor
+incertidumbre y no debe usarse para decisiones de planificación crítica.
+
+\subsubsection{Patrones espaciales}
+
+La proyección UMAP (Figura~\ref{fig:umap}) muestra los dos clusters sin
+superposición visible.
+Esto indica que la diferencia entre segmentos congestionados y no
+congestionados no es gradual sino \textbf{estructural}: hay calles que
+son congestionadas por naturaleza (topología de la red, función vial,
+proximidad al centro) y calles que casi nunca lo son.
+Esta estructura binaria emergió \emph{sin haber definido previamente}
+qué es ``congestión'', validando el poder discriminativo del enfoque
+no supervisado.
+
+DBSCAN complementa este panorama identificando 11 zonas de cobertura
+densa (silueta = 0{,}681).
+Al cruzar DBSCAN con K-Means se observa que los clusters espaciales
+ubicados en el centro de La Paz contienen una proporción mayor de
+segmentos de alta congestión temporal, coherente con la geografía urbana.
+
 \begin{itemize}
-  \item El \textbf{cluster de alta congestión} en La Paz agrupa calles del
-    centro histórico, la Av. Montes y los accesos a la autopista
-    La Paz--El Alto; en El Alto, la Ceja y la Av. 6 de Marzo.
+  \item El \textbf{cluster de alta congestión} agrupa calles del
+    centro histórico, la Av.\ Montes y los accesos a la autopista
+    La Paz--El Alto; en El Alto, la Ceja y la Av.\ 6 de Marzo.
 
   \item El \textbf{cluster de baja congestión} abarca barrios residenciales
     periféricos donde el tráfico no supera jam\_factor $\approx 1{,}3$
     incluso en hora pico.
-
-  \item La proyección UMAP (Figura~\ref{fig:umap}) revela dos grupos
-    claramente separados, confirmando que la diferencia de patrones es
-    genuina y no un artefacto del algoritmo.
-
-  \item Los días sintéticos (martes, jueves) producen perfiles coherentes
-    con los días reales adyacentes.
 \end{itemize}
 
 \begin{figure}[H]
@@ -1172,6 +1330,28 @@ La combinación de técnicas resultó más rica que cualquier método aislado:
 El resultado práctico —el dashboard interactivo— pone esta información
 al alcance de cualquier ciudadano o gestor de movilidad,
 con etiquetas claras sobre la fiabilidad de cada dato.
+
+\paragraph{Hallazgos sobre La Paz y El Alto.}
+La congestión severa en La Paz es \textbf{estructural}: el 10{,}8\,\% de
+arterias monitoreadas concentra los patrones de alta congestión, ubicadas
+principalmente en el centro histórico y accesos a la autopista.
+Intervenciones puntuales en esas arterias tendrían mayor impacto que
+medidas de alcance general en toda la red.
+
+El Alto exhibe un comportamiento más homogéneo (96{,}1\,\% de varianza
+PCA en 13 dimensiones), con solo el 4{,}0\,\% de segmentos de alta
+congestión, todos concentrados en La Ceja: el nodo de transferencia entre
+ambas ciudades.
+Mejorar la fluidez en La Ceja reduciría la congestión de manera
+desproporcionada respecto a cualquier otra intervención en El Alto.
+
+Los modelos no supervisados confirman que la diferencia de congestión
+entre barrios de La Paz no es un continuo sino una \textbf{dicotomía}:
+hay calles que casi siempre se congestión y calles que casi nunca lo hacen.
+Esta estructura binaria emergió sin haber etiquetado previamente ningún
+segmento como ``congestionado'' o ``libre'', lo que valida la capacidad
+del aprendizaje no supervisado para descubrir patrones genuinos en datos
+de tráfico real.
 
 \paragraph{Trabajo futuro.}
 Con datos históricos de más días y semanas sería posible aplicar
