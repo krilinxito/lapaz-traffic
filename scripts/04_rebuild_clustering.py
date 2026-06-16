@@ -66,13 +66,22 @@ def run_pipeline(segs_csv: Path, feat_csv: Path, zona: str) -> pd.DataFrame:
     cl_tmp = km.fit_predict(X)
     print(f"  K-Means k={K_MEANS_K}: {np.bincount(cl_tmp + (cl_tmp.min() < 0))}")
 
+    jam_vals = feat.mean(axis=1).values
+    _jam_df  = pd.DataFrame({"cl": cl_tmp, "jam": jam_vals})
+    _cl_alto = int(_jam_df.groupby("cl")["jam"].mean().idxmax())
+    patron_map = {c: ("Alto" if c == _cl_alto else "Bajo") for c in range(K_MEANS_K)}
+
     result = segs.copy()
     result["umap_x"]           = X_umap[:, 0]
     result["umap_y"]           = X_umap[:, 1]
     result["cluster_espacial"] = cl_esp
     result["cluster_temporal"] = cl_tmp
-    result["jam_mean"]         = feat.mean(axis=1).values
+    result["jam_mean"]         = jam_vals
     result["zona"]             = zona
+    result["zona_tipo"] = [
+        (f"Z{e}" if e != -1 else "Sin zona") + " — " + patron_map[t]
+        for e, t in zip(cl_esp, cl_tmp)
+    ]
     return result
 
 

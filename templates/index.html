@@ -256,6 +256,10 @@
               <tbody id="tabla-dbscan"></tbody>
             </table>
           </div>
+          <div class="section-title" style="border-top:1px solid var(--border);margin-top:2px;font-size:11px">
+            Zona espacial × patrón temporal — jam_mean promedio
+          </div>
+          <div class="p-2"><div id="chart-cross-matrix" style="height:260px"></div></div>
         </div>
       </div>
 
@@ -949,7 +953,7 @@ async function loadClusters() {
 
   await Promise.all([
     loadClusterPerfil(), loadPCA(), loadHeatmap(TIPOS_DIA[0]), loadViolin(d.points),
-    loadModelMetrics(), loadDBSCAN(), loadNMFArchetypes(),
+    loadModelMetrics(), loadDBSCAN(), loadNMFArchetypes(), loadCrossMatrix(),
   ]);
   window._clustersLoaded = true;
 }
@@ -1159,6 +1163,35 @@ async function loadDBSCAN() {
         <td style="font-size:11px;color:var(--muted)">${hwLabels[c.highway_dominante] || c.highway_dominante}</td>
       </tr>`;
     }).join('');
+}
+
+/* ── Matriz cruce DBSCAN × K-Means ─────────────────────────────────── */
+async function loadCrossMatrix() {
+  const zona = document.getElementById('zona-select').value;
+  const res  = await fetch(`/cross-matrix?zona=${zona}`);
+  const d    = await res.json();
+
+  Plotly.newPlot('chart-cross-matrix', [{
+    type: 'heatmap',
+    z: d.jam_matrix,
+    x: d.patron_labels,
+    y: d.zona_labels,
+    text: d.count_matrix.map(row => row.map(v => `n=${v}`)),
+    texttemplate: '%{text}',
+    textfont: { size: 10, color: '#0f172a' },
+    colorscale: [[0, '#1a9e5c'], [0.5, '#f4b942'], [1, '#e02020']],
+    zmin: 0,
+    showscale: true,
+    colorbar: { title: 'jam', thickness: 12, len: 0.75, titlefont: { size: 10 } },
+    hovertemplate: '<b>%{y} · %{x}</b><br>jam_mean: %{z:.3f}<br>%{text}<extra></extra>',
+  }], {
+    margin: { t: 8, l: 72, r: 60, b: 40 },
+    xaxis: { title: 'Patrón temporal', titlefont: { size: 11 } },
+    yaxis: { autorange: 'reversed', tickfont: { size: 10 } },
+    paper_bgcolor: 'transparent',
+    plot_bgcolor: 'transparent',
+    font: { family: 'Inter,sans-serif', size: 11 },
+  }, { responsive: true, displayModeBar: false });
 }
 
 /* ── NMF Arquetipos ─────────────────────────────────────────────────── */

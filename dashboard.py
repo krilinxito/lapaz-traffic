@@ -298,15 +298,9 @@ def build_map(hora: int, dia: str, cluster: int, zona: str = "lapaz") -> str:
         badge_bg    = "#fef2f2" if es_alto else "#f0fdf4"
         badge_color = "#dc2626" if es_alto else "#16a34a"
         badge_bdr   = "#fecaca" if es_alto else "#bbf7d0"
-        badge_label = "patrón ALTO" if es_alto else "patrón BAJO"
         cl_esp      = int(row.get("cluster_espacial", -1))
-        dbscan_badge = (
-            f'<span style="background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;'
-            f'padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700">'
-            f'DBSCAN zona {cl_esp}</span>'
-            if cl_esp != -1 else
-            '<span style="font-size:9px;color:#94a3b8">sin zona DBSCAN</span>'
-        )
+        zona_esp_str    = f"Z{cl_esp}" if cl_esp != -1 else "Sin zona"
+        zona_tipo_label = f"{zona_esp_str} — {'ALTO' if es_alto else 'BAJO'}"
         onclick_js  = (
             "window.parent.postMessage("
             "{type:'segment_click',segment_id:" + str(seg_id) + "},'*')"
@@ -323,10 +317,8 @@ def build_map(hora: int, dia: str, cluster: int, zona: str = "lapaz") -> str:
             '</div>'
             f'<div style="font-size:11px;color:#64748b;margin-bottom:4px">{hora:02d}:00 · {dia} · {hw}</div>'
             f'<span style="background:{badge_bg};color:{badge_color};border:1px solid {badge_bdr};'
-            f'padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700">{badge_label}</span>'
-            '<span style="font-size:9px;color:#94a3b8;margin-left:5px">K-Means</span>'
-            f'<div style="margin-top:4px">{dbscan_badge}'
-            '<span style="font-size:9px;color:#94a3b8;margin-left:5px">DBSCAN</span></div>'
+            f'padding:1px 7px;border-radius:3px;font-size:10px;font-weight:700">{zona_tipo_label}</span>'
+            '<span style="font-size:9px;color:#94a3b8;margin-left:5px">zona × patrón</span>'
             f'<button onclick="{onclick_js}" '
             'style="display:block;margin-top:8px;background:#0369a1;color:#fff;border:none;padding:5px 12px;'
             'border-radius:3px;cursor:pointer;font-size:11px;font-weight:600;width:100%">'
@@ -344,8 +336,8 @@ def build_map(hora: int, dia: str, cluster: int, zona: str = "lapaz") -> str:
             f'<div style="font-size:10px;color:#64748b;margin-top:2px">{hw} &middot; {dia}</div>'
             f'<div style="margin-top:6px;display:flex;align-items:center;gap:5px;flex-wrap:wrap">'
             f'<span style="background:{badge_bg};color:{badge_color};border:1px solid {badge_bdr};'
-            f'padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700">{badge_label}</span>'
-            f'{dbscan_badge}</div>'
+            f'padding:1px 6px;border-radius:3px;font-size:10px;font-weight:700">{zona_tipo_label}</span>'
+            f'</div>'
             f'<div style="font-size:10px;color:#94a3b8;margin-top:5px">&#8592; clic &middot; ver perfil 24 h</div>'
             f'</div>'
         )
@@ -837,6 +829,39 @@ def dbscan_data():
     })
 
 
+@app.route("/cross-matrix")
+def cross_matrix():
+    zona = request.args.get("zona", "lapaz")
+    cl   = get_clustered(zona)
+    ca   = cluster_alto_for(zona)
+
+    esp_ids = sorted(cl["cluster_espacial"].unique())
+    tmp_ids = sorted(cl["cluster_temporal"].unique(), key=lambda x: 0 if x != ca else 1)
+
+    zona_labels  = [f"Z{int(e)}" if int(e) != -1 else "Sin zona" for e in esp_ids]
+    patron_labels = ["Bajo" if t != ca else "Alto" for t in tmp_ids]
+
+    jam_matrix   = []
+    count_matrix = []
+    for esp in esp_ids:
+        row_jam, row_cnt = [], []
+        for tmp in tmp_ids:
+            mask = (cl["cluster_espacial"] == esp) & (cl["cluster_temporal"] == tmp)
+            cnt  = int(mask.sum())
+            jam  = float(cl.loc[mask, "jam_mean"].mean()) if cnt > 0 else 0.0
+            row_jam.append(round(jam, 4))
+            row_cnt.append(cnt)
+        jam_matrix.append(row_jam)
+        count_matrix.append(row_cnt)
+
+    return jsonify({
+        "zona_labels":   zona_labels,
+        "patron_labels": patron_labels,
+        "jam_matrix":    jam_matrix,
+        "count_matrix":  count_matrix,
+    })
+
+
 @app.route("/synthetic-days")
 def synthetic_days():
     zona = request.args.get("zona", "lapaz")
@@ -897,7 +922,7 @@ def map_dbscan():
         jam_clr   = jam_color(jam_seg * 10)
         tip_html  = (
             f'<div style="font-family:Inter,sans-serif;min-width:170px;padding:2px 0">'
-            f'<div style="font-size:12px;font-weight:700;color:{color};margin-bottom:3px">{zona_lbl}</div>'
+            f'<div style="font-size:12px;font-weight:700;color:{color};margin-bottom:3px">{zona_lbl} — {cl_lbl}</div>'
             f'<div style="background:#e2e8f0;border-radius:2px;height:3px;margin-bottom:5px">'
             f'<div style="background:{jam_clr};width:{jam_bar_w:.0f}%;height:3px;border-radius:2px"></div></div>'
             f'<div style="font-size:11px;line-height:1.7">'

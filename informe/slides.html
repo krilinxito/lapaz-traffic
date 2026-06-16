@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tráfico Inteligente — Diapositivas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* ── Paleta Mini Metro (idéntica al dashboard) ───────────────────── */
+:root{
+  --bg:#f5f0e8; --surface:#ffffff; --border:#e3ddd4;
+  --text:#1a1a1a; --muted:#8a8078;
+  --red:#e02020; --green:#1a9e5c; --blue:#1565c0;
+  --yellow:#f4b942; --orange:#e87722; --purple:#7b1fa2;
+  --radius:2px;
+}
+*,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+
+html,body{ height:100%; }
+body{
+  background:var(--bg); color:var(--text);
+  font-family:'Space Grotesk',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  overflow:hidden;
+}
+
+/* ── Línea de metro de progreso (top global) ─────────────────────── */
+.deck-progress{
+  position:fixed; top:0; left:0; height:3px; z-index:100;
+  width:var(--prog,0%);
+  background:linear-gradient(to right,
+    var(--red) 0%,var(--green) 33%,var(--blue) 66%,var(--yellow) 100%);
+  transition:width .35s ease;
+}
+
+/* ── Diapositiva ─────────────────────────────────────────────────── */
+.slide{
+  position:fixed; inset:0;
+  display:none; flex-direction:column;
+  padding:62px 76px 58px;
+  background:var(--bg);
+}
+.slide.active{ display:flex; animation:fade .3s ease; }
+@keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+/* Acento de línea por sección */
+.slide{ --line:var(--blue); }
+.slide[data-line=red]    { --line:var(--red); }
+.slide[data-line=green]  { --line:var(--green); }
+.slide[data-line=blue]   { --line:var(--blue); }
+.slide[data-line=orange] { --line:var(--orange); }
+.slide[data-line=yellow] { --line:var(--yellow); }
+.slide[data-line=purple] { --line:var(--purple); }
+
+/* ── Cabecera de diapo ───────────────────────────────────────────── */
+.kicker{
+  display:inline-flex; align-items:center; gap:9px;
+  font-size:13px; font-weight:700; letter-spacing:.4px;
+  color:var(--line); text-transform:uppercase;
+  margin-bottom:14px;
+}
+.kicker .station{
+  width:12px; height:12px; border-radius:50%;
+  background:var(--surface); border:3px solid var(--line); flex-shrink:0;
+}
+h1.title{
+  font-size:40px; font-weight:700; line-height:1.08;
+  letter-spacing:-1px; margin-bottom:6px;
+}
+.subtitle{ font-size:17px; color:var(--muted); font-weight:400; margin-bottom:20px; }
+
+/* Regla de líneas de metro bajo la cabecera */
+.metro-rule{
+  height:3px; width:100%; margin:0 0 26px;
+  background:linear-gradient(to right,
+    var(--red) 0%,var(--red) 28%,
+    var(--green) 28%,var(--green) 56%,
+    var(--blue) 56%,var(--blue) 84%,
+    var(--yellow) 84%,var(--yellow) 100%);
+  border-radius:2px;
+}
+
+/* ── Cuerpo / columnas ───────────────────────────────────────────── */
+.body{ flex:1; min-height:0; display:flex; gap:42px; align-items:flex-start; }
+.col{ flex:1; min-width:0; }
+.body.center{ align-items:center; }
+p.lead{ font-size:18px; line-height:1.6; color:var(--text); margin-bottom:16px; }
+p.note{ font-size:14.5px; line-height:1.6; color:var(--muted); margin-bottom:12px; }
+
+/* Lista estilo estaciones de metro */
+ul.stations{ list-style:none; }
+ul.stations li{
+  position:relative; padding:0 0 16px 28px;
+  font-size:15.5px; line-height:1.5;
+}
+ul.stations li::before{
+  content:''; position:absolute; left:0; top:4px;
+  width:12px; height:12px; border-radius:50%;
+  background:var(--surface); border:3px solid var(--line);
+}
+ul.stations li::after{
+  content:''; position:absolute; left:5px; top:16px; bottom:2px;
+  width:2px; background:var(--border);
+}
+ul.stations li:last-child::after{ display:none; }
+ul.stations li b{ font-weight:700; }
+ul.stations li .tag{ color:var(--muted); font-size:13px; }
+
+/* Cajas tipo concepto / advertencia */
+.box{
+  border-radius:var(--radius); padding:14px 16px; font-size:14.5px;
+  line-height:1.55; margin-bottom:14px;
+}
+.box.concept{ background:color-mix(in srgb,var(--blue) 7%,white); color:var(--text); border-left:3px solid var(--blue); }
+.box.adv{ background:#fff8e6; color:#7a5a10; border-left:3px solid var(--yellow); }
+.box b{ font-weight:700; }
+
+/* Fórmula */
+.formula{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:16px 20px; font-size:20px; text-align:center; margin-bottom:16px;
+  font-family:'Space Grotesk',sans-serif;
+}
+.formula .frac{ display:inline-flex; flex-direction:column; vertical-align:middle; margin:0 4px; }
+.formula .frac span{ padding:1px 8px; }
+.formula .frac .num{ border-bottom:2px solid var(--text); }
+.formula em{ color:var(--line); font-style:normal; font-weight:700; }
+
+/* Imagen de figura */
+.figure{
+  background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:10px; height:100%; display:flex; flex-direction:column; gap:8px;
+  align-items:center; justify-content:center;
+}
+.figure img{ max-width:100%; max-height:100%; object-fit:contain; }
+.figure figcaption{ font-size:12px; color:var(--muted); text-align:center; line-height:1.4; }
+
+/* Métricas en tarjetas */
+.metrics{ display:flex; gap:0; border:1px solid var(--border); border-radius:var(--radius); background:var(--surface); }
+.metric{ flex:1; padding:18px 10px; text-align:center; border-right:1px solid var(--border); }
+.metric:last-child{ border-right:none; }
+.metric .v{ font-size:30px; font-weight:700; letter-spacing:-.5px; line-height:1; color:var(--line); }
+.metric .l{ font-size:11.5px; color:var(--muted); margin-top:6px; font-weight:500; }
+
+/* Tabla */
+table.mm{ width:100%; border-collapse:collapse; font-size:14px; background:var(--surface);
+  border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+table.mm th{ font-size:11px; text-transform:uppercase; letter-spacing:.3px; color:var(--muted);
+  text-align:left; padding:9px 14px; border-bottom:1px solid var(--border); font-weight:700; }
+table.mm td{ padding:9px 14px; border-bottom:1px solid var(--border); }
+table.mm tr:last-child td{ border-bottom:none; }
+table.mm td b{ font-weight:700; }
+.pill{ display:inline-block; padding:1px 9px; border-radius:20px; font-size:11.5px; font-weight:600; }
+.pill.red{ background:color-mix(in srgb,var(--red) 14%,white); color:var(--red); }
+.pill.green{ background:color-mix(in srgb,var(--green) 14%,white); color:var(--green); }
+.pill.yellow{ background:#fdf3d8; color:#9a6f10; }
+
+/* Pasos horizontales (pipeline) */
+.pipeline{ display:flex; align-items:center; gap:0; flex-wrap:wrap; }
+.pstep{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius);
+  padding:12px 14px; min-width:120px; text-align:center; }
+.pstep .pt{ font-size:13.5px; font-weight:700; }
+.pstep .ps{ font-size:11px; color:var(--muted); margin-top:3px; }
+.parrow{ color:var(--line); font-size:20px; padding:0 10px; font-weight:700; }
+
+.tags{ margin-top:14px; }
+.tag-chip{ display:inline-block; background:var(--surface); border:1px solid var(--border);
+  border-radius:20px; font-size:12px; font-weight:500; padding:3px 11px; margin:0 6px 6px 0; }
+
+/* ── Pie: paginación + marca ─────────────────────────────────────── */
+.footer{
+  position:absolute; left:76px; right:76px; bottom:22px;
+  display:flex; align-items:center; justify-content:space-between;
+  font-size:11.5px; color:var(--muted); font-weight:500;
+}
+.footer .brand{ display:flex; align-items:center; gap:8px; }
+.footer .brand .dots{ display:inline-flex; gap:3px; }
+.footer .brand .dots i{ width:7px; height:7px; border-radius:50%; display:inline-block; }
+.footer .brand .dots i:nth-child(1){ background:var(--red); }
+.footer .brand .dots i:nth-child(2){ background:var(--green); }
+.footer .brand .dots i:nth-child(3){ background:var(--blue); }
+.footer .brand .dots i:nth-child(4){ background:var(--yellow); }
+.pageno{ font-variant-numeric:tabular-nums; letter-spacing:.5px; }
+.pageno b{ color:var(--text); font-weight:700; }
+
+/* ── Portada / cierre ────────────────────────────────────────────── */
+.cover{ align-items:center; justify-content:center; text-align:center; }
+.cover img.logo{ width:96px; margin-bottom:18px; }
+.cover .uni{ font-size:15px; color:var(--muted); margin-bottom:4px; }
+.cover .uni b{ color:var(--text); font-weight:700; font-size:17px; }
+.cover h1{ font-size:56px; font-weight:700; letter-spacing:-2px; line-height:1; margin:22px 0 10px; }
+.cover .csub{ font-size:19px; color:var(--text); max-width:760px; line-height:1.4; }
+.cover .meta{ margin-top:30px; font-size:14.5px; color:var(--muted); line-height:1.8; }
+.cover .meta b{ color:var(--text); }
+.cover .bigrule{ width:min(720px,80%); }
+.cover-end h1{ font-size:64px; }
+
+/* índice de estaciones */
+.toc-line{ display:flex; flex-direction:column; gap:0; }
+.toc-item{ position:relative; padding:9px 0 9px 36px; font-size:18px; font-weight:500; }
+.toc-item::before{ content:''; position:absolute; left:6px; top:11px; width:14px; height:14px;
+  border-radius:50%; background:var(--surface); border:3px solid var(--c,var(--blue)); }
+.toc-item::after{ content:''; position:absolute; left:12px; top:23px; bottom:-9px; width:2px; background:var(--border); }
+.toc-item:last-child::after{ display:none; }
+.toc-item .n{ color:var(--muted); font-weight:700; font-size:14px; margin-right:10px; }
+
+/* ── Ayuda navegación ────────────────────────────────────────────── */
+.nav-hint{
+  position:fixed; bottom:20px; left:50%; transform:translateX(-50%);
+  font-size:11px; color:var(--muted); background:var(--surface);
+  border:1px solid var(--border); border-radius:20px; padding:4px 14px; z-index:90;
+  opacity:.85;
+}
+@media (max-width:820px){
+  .slide{ padding:40px 30px 50px; }
+  .body{ flex-direction:column; gap:20px; overflow:auto; }
+  .footer{ left:30px; right:30px; }
+  h1.title{ font-size:30px; } .cover h1{ font-size:40px; }
+}
+
+/* ── Impresión → PDF paginado ────────────────────────────────────── */
+@media print{
+  @page{ size:1280px 720px; margin:0; }
+  body{ overflow:visible; }
+  .deck-progress,.nav-hint{ display:none; }
+  .slide{ position:relative; inset:auto; display:flex !important;
+    width:1280px; height:720px; page-break-after:always; break-after:page; }
+}
+</style>
+</head>
+<body>
+
+<div class="deck-progress" id="progress"></div>
+
+<!-- 1 ▸ PORTADA ──────────────────────────────────────────────────── -->
+<section class="slide cover active" data-line="blue">
+  <div class="uni"><b>Universidad Mayor de San Andrés</b></div>
+  <div class="uni">Facultad de Ciencias Puras y Naturales · Carrera de Informática</div>
+  <img class="logo" src="img/Logo_Umsa.png" alt="UMSA">
+  <div class="metro-rule bigrule"></div>
+  <h1>Tráfico Inteligente</h1>
+  <div class="csub">Análisis no supervisado de la congestión vial en La Paz y El Alto, Bolivia
+    mediante Aprendizaje Automático No Supervisado</div>
+  <div class="metro-rule bigrule" style="margin-top:24px"></div>
+  <div class="meta">
+    <b>Maximiliano Gómez Mallo</b> · 14480221<br>
+    Machine Learning · Docente: Menfy Morales Rios<br>
+    La Paz, Bolivia — Mayo 2026
+  </div>
+</section>
+
+<!-- 2 ▸ ÍNDICE ───────────────────────────────────────────────────── -->
+<section class="slide" data-line="blue">
+  <span class="kicker"><span class="station"></span>Contenido</span>
+  <h1 class="title">La ruta del proyecto</h1>
+  <div class="metro-rule"></div>
+  <div class="body center">
+    <div class="col">
+      <div class="toc-line">
+        <div class="toc-item" style="--c:var(--blue)"><span class="n">01</span>Introducción</div>
+        <div class="toc-item" style="--c:var(--red)"><span class="n">02</span>Adquisición de datos</div>
+        <div class="toc-item" style="--c:var(--orange)"><span class="n">03</span>Feature matrix</div>
+        <div class="toc-item" style="--c:var(--green)"><span class="n">04</span>Modelos no supervisados</div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="toc-line">
+        <div class="toc-item" style="--c:var(--purple)"><span class="n">05</span>Pipeline y decisiones de diseño</div>
+        <div class="toc-item" style="--c:var(--blue)"><span class="n">06</span>Dashboard interactivo</div>
+        <div class="toc-item" style="--c:var(--red)"><span class="n">07</span>Resultados</div>
+        <div class="toc-item" style="--c:var(--green)"><span class="n">08</span>Conclusiones</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 3 ▸ INTRODUCCIÓN ─────────────────────────────────────────────── -->
+<section class="slide" data-line="blue">
+  <span class="kicker"><span class="station"></span>01 · Introducción</span>
+  <h1 class="title">Dos ciudades, una hoya, mucha congestión</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col">
+      <p class="lead">La Paz descansa en una hoya montañosa a <b>3 600 m.s.n.m.</b>;
+        El Alto se extiende en el altiplano a <b>4 100 m.s.n.m.</b> Apenas unas
+        autopistas de alta pendiente las conectan: cualquier incidente desata
+        una cascada de congestión.</p>
+      <div class="box concept"><b>Objetivo.</b> Clasificar automáticamente segmentos
+        de carretera según su patrón de congestión <b>sin etiquetas previas</b> —sin
+        que nadie defina de antemano qué es "alta congestión" o "zona tranquila".</div>
+    </div>
+    <div class="col">
+      <ul class="stations">
+        <li><b>Reducción de dimensionalidad</b> — PCA, UMAP</li>
+        <li><b>Clustering espacial</b> — DBSCAN <span class="tag">(geografía)</span></li>
+        <li><b>Clustering temporal</b> — K-Means <span class="tag">(perfil horario)</span></li>
+        <li><b>Síntesis de datos faltantes</b> — NMF + PCHIP</li>
+        <li><b>Dashboard interactivo</b> — explorar hora a hora, comparar ciudades</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 4 ▸ ¿POR QUÉ NO SUPERVISADO? ─────────────────────────────────── -->
+<section class="slide" data-line="green">
+  <span class="kicker"><span class="station"></span>01 · Introducción</span>
+  <h1 class="title">¿Por qué aprendizaje no supervisado?</h1>
+  <div class="metro-rule"></div>
+  <div class="body center">
+    <div class="col">
+      <div class="box adv"><b>Supervisado.</b> Alguien debe etiquetar antes: "esta
+        calle es alta congestión", "esta otra es tranquila". Requiere expertos,
+        tiempo y dinero.</div>
+      <div class="box concept"><b>No supervisado.</b> El algoritmo descubre la
+        estructura por sí mismo preguntando: <i>¿qué segmentos se parecen entre sí?</i></div>
+    </div>
+    <div class="col">
+      <p class="lead">En lugar de forzar dos categorías rígidas, el modelo puede
+        descubrir <b>grupos sutiles</b> que un humano nunca habría definido a priori.</p>
+      <p class="note">Esta pregunta es mucho más poderosa cuando los datos son
+        complejos — como el tráfico de una conurbación de montaña.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 5 ▸ JAM FACTOR ───────────────────────────────────────────────── -->
+<section class="slide" data-line="red">
+  <span class="kicker"><span class="station"></span>02 · Adquisición de datos</span>
+  <h1 class="title">Medir la congestión: el <i>jam factor</i></h1>
+  <div class="metro-rule"></div>
+  <div class="body center">
+    <div class="col">
+      <p class="note">La <b>Distance Matrix API</b> de Google devuelve el tiempo de
+        viaje con y sin tráfico entre pares de puntos. De ahí:</p>
+      <div class="formula">
+        jam_factor =
+        <span class="frac">
+          <span class="num">duración con tráfico</span>
+          <span>duración típica</span>
+        </span>
+      </div>
+    </div>
+    <div class="col">
+      <div class="box concept"><b>¿Cómo interpretarlo?</b><br>
+        <b>1,0</b> → tráfico fluido (tarda lo esperado).<br>
+        <b>2,5</b> → el trayecto toma 2,5× lo normal.<br>
+        En La Paz oscila entre <b>1,0</b> (madrugada) y <b>≈3,5</b> (hora pico).</div>
+    </div>
+  </div>
+</section>
+
+<!-- 6 ▸ RED VIAL OSMnx ───────────────────────────────────────────── -->
+<section class="slide" data-line="red">
+  <span class="kicker"><span class="station"></span>02 · Adquisición de datos</span>
+  <h1 class="title">Red vial con OSMnx</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.95">
+      <p class="lead">OSMnx descarga gratis el grafo vial de OpenStreetMap. La Paz
+        tiene <b>≈ 37 100 segmentos</b> de calle, cada uno con coordenadas, longitud
+        y tipo de vía.</p>
+      <div class="box concept"><b>Muestreo estratificado.</b> Consultar todos
+        excedería el presupuesto de la API → <b>250 segmentos por zona</b>,
+        estratificando por tipo de vía para que autopistas, avenidas y calles
+        residenciales estén representadas proporcionalmente.</div>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/red_vial.png" alt="Red vial de La Paz">
+        <figcaption>Red vial completa de La Paz (37 100 segmentos), desde autopistas hasta calles locales.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 7 ▸ DÍAS Y HORAS ─────────────────────────────────────────────── -->
+<section class="slide" data-line="red">
+  <span class="kicker"><span class="station"></span>02 · Adquisición de datos</span>
+  <h1 class="title">Días y horas recolectados</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.85">
+      <p class="lead">Por la cuota de la API se recolectaron <b>4 días</b>
+        representativos, con sus <b>24 horas</b> cada uno:</p>
+      <ul class="stations">
+        <li><b>Lunes</b> — día laboral típico</li>
+        <li><b>Miércoles</b> — mitad de semana</li>
+        <li><b>Viernes</b> — laboral con tráfico extra</li>
+        <li><b>Sábado</b> — fin de semana</li>
+      </ul>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/perfiles_raw.png" alt="Perfiles de congestión por hora">
+        <figcaption>Pico matutino (7–9 h) y vespertino (17–19 h) característicos; el sábado más suave.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 8 ▸ FEATURE MATRIX ───────────────────────────────────────────── -->
+<section class="slide" data-line="orange">
+  <span class="kicker"><span class="station"></span>03 · Feature matrix</span>
+  <h1 class="title">Cada calle, un vector de números</h1>
+  <div class="metro-rule"></div>
+  <div class="body center">
+    <div class="col">
+      <p class="note">Cada fila es un segmento; cada columna, el jam_factor promedio
+        en una combinación {día, hora}:</p>
+      <div class="formula">X ∈ ℝ<sup>250 × 96</sup> &nbsp;<em>=</em>&nbsp; 250 segmentos × (4 días · 24 h)</div>
+      <div class="box adv"><b>¿Por qué las 24 h y no solo la hora pico?</b> El patrón
+        completo del día distingue mejor el tipo de calle: una avenida comercial se
+        congestiona también al mediodía; una autopista de salida, solo en hora pico.</div>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/preprocesamiento.png" alt="Distribución del jam factor">
+        <figcaption>Distribución global del jam_factor: mayoría cerca de 1,0 (fluido), con cola hacia valores altos en hora pico.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 9 ▸ PCA ──────────────────────────────────────────────────────── -->
+<section class="slide" data-line="orange">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">PCA — la sombra más informativa</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.95">
+      <p class="lead">PCA busca <b>el ángulo de iluminación</b> que produce la sombra
+        más informativa: la proyección que preserva la mayor variación entre puntos.</p>
+      <div class="box concept">De <b>96 dimensiones</b> (una por hora-día) a <b>13</b>:
+        con K=13 se captura entre el <b>86,8 %</b> (La Paz) y el <b>96,1 %</b> (El Alto)
+        de la varianza total.</div>
+      <p class="note"><b>PC1</b> ≈ nivel general de congestión · <b>PC2</b> ≈ laboral vs. sábado.</p>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/pca_varianza.png" alt="Varianza explicada PCA">
+        <figcaption>Scree y varianza acumulada: con 13 componentes se supera el umbral del 85 %.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 10 ▸ UMAP ────────────────────────────────────────────────────── -->
+<section class="slide" data-line="orange">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">UMAP — el mapa del terreno</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.95">
+      <p class="lead">Si PCA es una foto aérea (proyección lineal), UMAP hace un
+        <b>mapa cartográfico</b> de la variedad curva: aplana a 2D manteniendo
+        vecinos como vecinos.</p>
+      <ul class="stations">
+        <li><b>n_neighbors = 15</b> <span class="tag">equilibrio local/global (250 puntos)</span></li>
+        <li><b>min_dist = 0.1</b> <span class="tag">evita solapamiento</span></li>
+        <li>Preserva la <b>estructura global</b> mejor que t-SNE</li>
+      </ul>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/umap_proyeccion.png" alt="Proyección UMAP">
+        <figcaption>Dos grupos sin superposición → alta y baja congestión, ya separables en 2D.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 11 ▸ DBSCAN ──────────────────────────────────────────────────── -->
+<section class="slide" data-line="green">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">DBSCAN — islas de densidad</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col">
+      <p class="lead">Un <b>barrio</b> es una zona donde las casas están juntas,
+        separada de otras por áreas vacías. DBSCAN busca esas islas sobre las
+        <b>coordenadas GPS</b> (distancia haversine, eps = 500 m).</p>
+      <ul class="stations">
+        <li><b>No requiere k</b> — lo encuentra solo</li>
+        <li><b>Detecta outliers</b> — ruido marcado como −1</li>
+      </ul>
+    </div>
+    <div class="col">
+      <div class="metrics" style="margin-bottom:16px">
+        <div class="metric"><div class="v">11</div><div class="l">clusters</div></div>
+        <div class="metric"><div class="v">68 %</div><div class="l">ruido</div></div>
+        <div class="metric"><div class="v">0,681</div><div class="l">silueta</div></div>
+      </div>
+      <div class="box concept"><b>El ruido no es un fallo.</b> Con 250 segmentos sobre
+        ~2 167 km de red, cada punto tiene ~2,1 vecinos en 500 m. DBSCAN detecta
+        zonas de <b>cobertura densa</b>, no de congestión — su valor está en
+        cruzarse con K-Means.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 12 ▸ K-MEANS ─────────────────────────────────────────────────── -->
+<section class="slide" data-line="green">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">K-Means — clustering temporal</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.95">
+      <p class="lead">Asignación iterativa: elegir representantes, asignar al más
+        parecido, recalcular el promedio, repetir. Minimiza la distancia al centroide:</p>
+      <div class="formula"><em>J</em> = Σ<sub>j</sub> Σ<sub>i∈Cⱼ</sub> ‖ xᵢ − μⱼ ‖²</div>
+      <p class="note"><b>Método del codo</b> + <b>índice de silueta</b> señalan
+        <b>k = 2</b> (silueta = <b>0,766</b>): clusters genuinos, no conveniencia.</p>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/perfiles_clusters.png" alt="Perfiles por cluster">
+        <figcaption>Cluster alta congestión: picos pronunciados en hora pico. Baja congestión: plano cerca de 1,0.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 13 ▸ MAPA DE CLUSTERS ────────────────────────────────────────── -->
+<section class="slide" data-line="green">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">Dónde está la congestión</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:1.15">
+      <figure class="figure">
+        <img src="img/mapa_clusters.png" alt="Mapa de clusters">
+        <figcaption>Izq.: K-Means temporal (rojo = alta, verde = baja). Der.: DBSCAN espacial. ▢ El Alto · ○ La Paz.</figcaption>
+      </figure>
+    </div>
+    <div class="col">
+      <table class="mm">
+        <tr><th>Zona</th><th>Alta cong.</th><th>Baja cong.</th></tr>
+        <tr><td><b>La Paz</b></td><td><span class="pill red">10,8 %</span></td><td><span class="pill green">89,2 %</span></td></tr>
+        <tr><td><b>El Alto</b></td><td><span class="pill red">4,0 %</span></td><td><span class="pill green">96,0 %</span></td></tr>
+      </table>
+      <div class="box concept" style="margin-top:14px">La congestión severa se concentra
+        en pocas arterias: centro histórico, Av. Montes y autopista La Paz–El Alto;
+        la Ceja y la Av. 6 de Marzo en El Alto. Pico bimodal: <b>08:00</b> y <b>19:00</b>.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 14 ▸ NMF ─────────────────────────────────────────────────────── -->
+<section class="slide" data-line="purple">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">NMF — los arquetipos del tráfico</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.85">
+      <p class="lead">Solo se midieron 4 días. NMF completa la semana sin gastar
+        cuota: descompone <b>X ≈ W · H</b> con W, H ≥ 0.</p>
+      <div class="formula">X<sub>250×96</sub> <em>≈</em> W<sub>250×6</sub> · H<sub>6×96</sub></div>
+      <p class="note">La <b>no-negatividad</b> es clave: el jam_factor nunca es
+        negativo, así los arquetipos y pesos son directamente interpretables.</p>
+    </div>
+    <div class="col">
+      <table class="mm">
+        <tr><th>Arq.</th><th>Pico</th><th>Interpretación</th></tr>
+        <tr><td>A0</td><td>19:00</td><td>Salida laboral vespertina</td></tr>
+        <tr><td>A1</td><td>08:00</td><td>Entrada laboral matutina</td></tr>
+        <tr><td>A2</td><td>17:00</td><td>Tarde laboral / comercial</td></tr>
+        <tr><td>A3</td><td>14:00</td><td>Actividad comercial mediodía</td></tr>
+        <tr><td>A4</td><td>07:00</td><td>Madrugada / logística</td></tr>
+        <tr><td>A5</td><td>12:00</td><td>Pausa del mediodía residencial</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 15 ▸ PCHIP ───────────────────────────────────────────────────── -->
+<section class="slide" data-line="purple">
+  <span class="kicker"><span class="station"></span>04 · Modelos no supervisados</span>
+  <h1 class="title">PCHIP — la curva que no oscila</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.9">
+      <p class="lead">Interpola los arquetipos para los días faltantes (martes,
+        jueves, domingo). <b>PCHIP</b> preserva la monotonía: no inventa picos ni
+        valles artificiales como el spline cúbico al extrapolar.</p>
+      <div class="box adv"><b>RMSE-CV conservador.</b> Ocultar miércoles y predecirlo
+        desde lunes/viernes/sábado es un salto de 4 posiciones → cota superior:
+        La Paz <b>0,462</b> · El Alto <b>0,435</b>. Martes y jueves tienen menos error real.</div>
+    </div>
+    <div class="col">
+      <table class="mm">
+        <tr><th>Día</th><th>Tipo</th><th>Confianza</th></tr>
+        <tr><td>Lunes</td><td>Real</td><td><span class="pill green">Alta</span></td></tr>
+        <tr><td>Martes</td><td>Interpolado</td><td><span class="pill yellow">Media</span></td></tr>
+        <tr><td>Miércoles</td><td>Real</td><td><span class="pill green">Alta</span></td></tr>
+        <tr><td>Jueves</td><td>Interpolado</td><td><span class="pill yellow">Media</span></td></tr>
+        <tr><td>Viernes</td><td>Real</td><td><span class="pill green">Alta</span></td></tr>
+        <tr><td>Sábado</td><td>Real</td><td><span class="pill green">Alta</span></td></tr>
+        <tr><td>Domingo</td><td>Extrapolado</td><td><span class="pill red">Baja</span></td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 16 ▸ PIPELINE ────────────────────────────────────────────────── -->
+<section class="slide" data-line="purple">
+  <span class="kicker"><span class="station"></span>05 · Pipeline y decisiones</span>
+  <h1 class="title">El flujo completo de datos</h1>
+  <div class="metro-rule"></div>
+  <div class="body" style="flex-direction:column; gap:26px;">
+    <div class="pipeline">
+      <div class="pstep"><div class="pt">01 Red vial</div><div class="ps">OSMnx</div></div>
+      <span class="parrow">→</span>
+      <div class="pstep"><div class="pt">02 Recolección</div><div class="ps">Distance Matrix API</div></div>
+      <span class="parrow">→</span>
+      <div class="pstep"><div class="pt">03 Feature matrix</div><div class="ps">250 × 96</div></div>
+      <span class="parrow">→</span>
+      <div class="pstep"><div class="pt">05 NMF + PCHIP</div><div class="ps">250 × 168</div></div>
+      <span class="parrow">→</span>
+      <div class="pstep"><div class="pt">04 Clustering</div><div class="ps">500 filas</div></div>
+      <span class="parrow">→</span>
+      <div class="pstep"><div class="pt">Dashboard</div><div class="ps">Flask</div></div>
+    </div>
+    <div class="body" style="gap:42px">
+      <div class="col"><ul class="stations">
+        <li><b>250 segmentos/zona</b> — ~24 000 consultas/zona ≈ \$120 total</li>
+        <li><b>NMF sobre PCA</b> — garantiza jam_factor ≥ 0 al reconstruir</li>
+      </ul></div>
+      <div class="col"><ul class="stations">
+        <li><b>PCHIP sobre spline</b> — domingo es extrapolación; sin oscilaciones</li>
+        <li><b>eps = 500 m</b> — distancia a pie de ~6 min, escala de "barrio"</li>
+      </ul></div>
+    </div>
+  </div>
+</section>
+
+<!-- 17 ▸ DASHBOARD ───────────────────────────────────────────────── -->
+<section class="slide" data-line="blue">
+  <span class="kicker"><span class="station"></span>06 · Dashboard interactivo</span>
+  <h1 class="title">Del modelo al ciudadano</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col">
+      <p class="lead">Construido con <b>Flask</b> (servidor Python) y <b>Folium</b>
+        (mapas Leaflet en el navegador).</p>
+      <div class="pipeline" style="margin-bottom:16px">
+        <div class="pstep"><div class="pt">Navegador</div></div>
+        <span class="parrow">→</span>
+        <div class="pstep"><div class="pt">Flask</div><div class="ps">/map?zona&dia&hora</div></div>
+        <span class="parrow">→</span>
+        <div class="pstep"><div class="pt">CSV / GeoJSON</div></div>
+      </div>
+    </div>
+    <div class="col">
+      <ul class="stations">
+        <li><b>Por hora</b> — jam_factor del día/hora elegidos (verde→rojo)</li>
+        <li><b>Promedio histórico</b> — media de 168 columnas, arterias crónicas</li>
+        <li><b>Extensión por nombre</b> — colorea toda la avenida, no solo puntos</li>
+        <li><b>Transparencia</b> — "Martes (est.)" y aviso amarillo en días sintéticos</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 18 ▸ RESULTADOS ──────────────────────────────────────────────── -->
+<section class="slide" data-line="red">
+  <span class="kicker"><span class="station"></span>07 · Resultados</span>
+  <h1 class="title">La Paz vs. El Alto</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col" style="flex:.9">
+      <table class="mm" style="margin-bottom:14px">
+        <tr><th>Indicador</th><th>La Paz</th><th>El Alto</th></tr>
+        <tr><td>Varianza PCA (13)</td><td>86,8 %</td><td><b>96,1 %</b></td></tr>
+        <tr><td>Alta congestión</td><td><b>10,8 %</b></td><td>4,0 %</td></tr>
+        <tr><td>NMF RMSE-CV</td><td>0,462</td><td>0,435</td></tr>
+      </table>
+      <div class="box concept">El Alto es más <b>homogéneo y predecible</b>
+        (96,1 % de varianza en 13 comps.). La Paz, por su topografía de hoya,
+        tiene patrones más heterogéneos.</div>
+    </div>
+    <div class="col">
+      <figure class="figure">
+        <img src="img/perfiles_24h.png" alt="Perfiles 24h por cluster">
+        <figcaption>Curvas por hora: alta congestión con picos a 8 h y 17–19 h; baja congestión plana.</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- 19 ▸ LIMITACIONES ────────────────────────────────────────────── -->
+<section class="slide" data-line="yellow">
+  <span class="kicker"><span class="station"></span>07 · Resultados</span>
+  <h1 class="title">Limitaciones</h1>
+  <div class="metro-rule"></div>
+  <div class="body center">
+    <div class="col">
+      <ul class="stations">
+        <li><b>Muestra.</b> 250 de ~37 100 segmentos; calles importantes pueden faltar.</li>
+        <li><b>Datos de Google.</b> Estimaciones anónimas; difieren en feriados o bloqueos.</li>
+      </ul>
+    </div>
+    <div class="col">
+      <ul class="stations">
+        <li><b>Días estimados.</b> Martes, jueves y domingo son síntesis estadísticas.</li>
+        <li><b>Estacionalidad.</b> Período acotado 2024–2025; sin variación estacional.</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 20 ▸ CONCLUSIONES ────────────────────────────────────────────── -->
+<section class="slide" data-line="green">
+  <span class="kicker"><span class="station"></span>08 · Conclusiones</span>
+  <h1 class="title">La congestión es estructural, no gradual</h1>
+  <div class="metro-rule"></div>
+  <div class="body">
+    <div class="col">
+      <p class="lead">Sin etiquetar ningún segmento, los modelos descubrieron una
+        <b>dicotomía</b>: hay calles que casi siempre se congestionan y otras que
+        casi nunca lo hacen.</p>
+      <div class="box concept"><b>La Paz:</b> el 10,8 % de arterias —centro histórico
+        y accesos a la autopista— concentran la congestión. <b>El Alto:</b> el 4,0 %,
+        casi todo en La Ceja, el nodo de transferencia entre ambas ciudades.</div>
+    </div>
+    <div class="col">
+      <ul class="stations">
+        <li><b>PCA</b> — 96 → 13 dims, 86–96 % de la información</li>
+        <li><b>UMAP</b> — separación visible en 2D</li>
+        <li><b>DBSCAN</b> — vecindades sin asumir forma ni k</li>
+        <li><b>K-Means</b> — patrones temporales interpretables</li>
+        <li><b>NMF + PCHIP</b> — semana completa con incertidumbre cuantificada</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- 21 ▸ CIERRE ──────────────────────────────────────────────────── -->
+<section class="slide cover cover-end" data-line="blue">
+  <div class="metro-rule bigrule"></div>
+  <h1>Gracias</h1>
+  <div class="csub">Tráfico Inteligente · Aprendizaje no supervisado de la congestión vial</div>
+  <div class="meta"><b>Maximiliano Gómez Mallo</b> · Machine Learning · UMSA — 2026</div>
+  <div class="metro-rule bigrule" style="margin-top:24px"></div>
+</section>
+
+<div class="nav-hint">← / → · barra espaciadora para avanzar · <b>P</b> para imprimir/PDF</div>
+
+<script>
+const slides = Array.from(document.querySelectorAll('.slide'));
+const total  = slides.length;
+let cur = 0;
+
+// Inyecta pie con paginación y marca en cada diapo
+slides.forEach((s, i) => {
+  const f = document.createElement('div');
+  f.className = 'footer';
+  f.innerHTML =
+    '<span class="brand"><span class="dots"><i></i><i></i><i></i><i></i></span>'
+    + 'Tráfico Inteligente · La Paz &amp; El Alto</span>'
+    + '<span class="pageno"><b>' + String(i + 1).padStart(2, '0') + '</b> / '
+    + String(total).padStart(2, '0') + '</span>';
+  s.appendChild(f);
+});
+
+function show(n){
+  cur = Math.max(0, Math.min(total - 1, n));
+  slides.forEach((s, i) => s.classList.toggle('active', i === cur));
+  document.getElementById('progress').style.setProperty(
+    '--prog', (total > 1 ? (cur / (total - 1) * 100) : 100) + '%');
+}
+
+function next(){ show(cur + 1); }
+function prev(){ show(cur - 1); }
+
+document.addEventListener('keydown', e => {
+  if (['ArrowRight','ArrowDown',' ','PageDown'].includes(e.key)){ e.preventDefault(); next(); }
+  else if (['ArrowLeft','ArrowUp','PageUp'].includes(e.key)){ e.preventDefault(); prev(); }
+  else if (e.key === 'Home'){ show(0); }
+  else if (e.key === 'End'){ show(total - 1); }
+  else if (e.key === 'p' || e.key === 'P'){ window.print(); }
+});
+document.addEventListener('click', e => { if (!e.target.closest('a')) next(); });
+
+show(0);
+</script>
+</body>
+</html>
