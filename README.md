@@ -1,6 +1,26 @@
 # Tráfico LP — Análisis no supervisado de congestión vial
 
-Dashboard interactivo para el análisis de tráfico en **La Paz y El Alto, Bolivia**, usando técnicas de aprendizaje automático no supervisado: PCA, UMAP, K-Means, DBSCAN, NMF y PCHIP.
+Análisis de la congestión vehicular en **La Paz y El Alto** a partir de un dataset propio: mediciones
+horarias de tiempos de viaje recolectadas con la Google Distance Matrix API sobre la red vial de
+OpenStreetMap. No hay datos etiquetados ni encuestas — todo el conocimiento sale de técnicas no
+supervisadas.
+
+**96 mediciones horarias × 250 segmentos viales**, en lunes, miércoles, viernes y sábado.
+
+## Qué se encontró
+
+- **La congestión severa de La Paz es estructural, no dispersa.** El **10,8 %** de las arterias
+  monitoreadas concentra los patrones de alta congestión, sobre todo en el centro histórico y los
+  accesos a la autopista. Intervenir ahí rinde más que repartir esfuerzo por toda la ciudad.
+- **96 dimensiones se comprimen a 13** conservando entre el 86 % y el 96 % de la información, lo que
+  confirma que los perfiles horarios son mucho menos variados de lo que parecen.
+- Cada técnica aporta algo distinto: PCA reduce ruido, UMAP hace visible la separación en 2D, DBSCAN
+  encuentra vecindades geográficas sin fijar `k` de antemano, K-Means segmenta perfiles temporales
+  interpretables, y NMF + PCHIP completan los días no medidos respetando que el `jam_factor` no puede
+  ser negativo.
+
+El dashboard etiqueta explícitamente qué datos son medidos y cuáles reconstruidos, para no presentar
+una estimación como si fuera una observación.
 
 ## Estructura del proyecto
 
